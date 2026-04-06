@@ -246,10 +246,11 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
         return round(pose_x, 2), round(pose_y, 2)  
 
     def get_world_dimensions(self):
-        """ 
+        """
         Get the dimensions of the world based on the heightmap.
 
-        Offset the origin height by 3% of the launch height to avoid collision with the ground.
+        pose_z is always 0.0 so the terrain floor (pixel=0) starts at world z=0,
+        ensuring no negative terrain altitudes.
 
         Args:
             None
@@ -270,17 +271,7 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
         origin_coord = self.get_true_origin()
         launch_location = self.get_launch_location()
         pose_x,pose_y = self.get_offset(origin_coord,launch_location)
-        launch_px, launch_py = self.get_launch_pixelcord(
-            true_boundaries["southwest"], 
-            true_boundaries["northeast"], 
-            self.heightmap.size[0], 
-            self.heightmap.size[1],
-            launch_location
-        )
-
-        # Calculate launch height and pose offset
-        launch_height = self.heightmap.getpixel((launch_px, launch_py)) * self.size_z / 255
-        pose_z = round(-1 * (launch_height + 0.03 * launch_height), 2)  
+        pose_z = 0.0
 
         return self.size_x,self.size_y,self.size_z,pose_x,pose_y,pose_z
 
