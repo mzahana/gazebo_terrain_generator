@@ -4,6 +4,9 @@ import numpy as np
 import math
 from PIL import Image
 from multiprocessing import Pool, cpu_count
+import rasterio
+from rasterio.transform import from_bounds
+from rasterio.crs import CRS as RasterioCRS
 
 from utils.maptileUtils import maptile_utiles
 from utils.utils import ConcatImage
@@ -147,10 +150,45 @@ class HeightmapGenerator(ConcatImage):
         resized_map  = cv2.resize(height_img_normalized, (size,size), interpolation=cv2.INTER_LINEAR)
 
         model = os.path.basename(model_path)
+        textures_dir = os.path.join(globalParam.GAZEBO_MODEL_PATH, model, 'textures')
 
-        # Convert OpenCV image to PIL Image and save as TIFF
-        self.heightmap = Image.fromarray(resized_map, mode='L')  # 'L' for 8-bit grayscale
-        self.heightmap.save(os.path.join(globalParam.GAZEBO_MODEL_PATH, model, 'textures', model+'_height_map.tif'), format="TIFF")
+        # Geographic bounds from the true boundaries of this region
+        west  = true_boundaries['southwest'][1]   # min longitude
+        south = true_boundaries['southwest'][0]   # min latitude
+        east  = true_boundaries['northeast'][1]   # max longitude
+        north = true_boundaries['northeast'][0]   # max latitude
+        geo_transform = from_bounds(west, south, east, north, size, size)
+        geo_crs = RasterioCRS.from_epsg(4326)
+
+        # --- Output 1: Gazebo heightmap TIF (16-bit normalized, georeferenced) ---
+        height_img_16bit = ((height_map - np.min(height_map)) /
+                            (np.max(height_map) - np.min(height_map)) * 65535).astype(np.uint16)
+        resized_16bit = cv2.resize(height_img_16bit, (size, size), interpolation=cv2.INTER_LINEAR)
+
+        gazebo_tif_path = os.path.join(textures_dir, model + '_height_map.tif')
+        with rasterio.open(
+            gazebo_tif_path, 'w',
+            driver='GTiff', height=size, width=size,
+            count=1, dtype='uint16',
+            crs=geo_crs, transform=geo_transform
+        ) as dst:
+            dst.write(resized_16bit, 1)
+
+        # --- Output 2: Elevation GeoTIFF (float32 actual AMSL values, georeferenced) ---
+        resized_elevation = cv2.resize(height_map, (size, size), interpolation=cv2.INTER_LINEAR)
+        elevation_tif_path = os.path.join(textures_dir, model + '_elevation.tif')
+        with rasterio.open(
+            elevation_tif_path, 'w',
+            driver='GTiff', height=size, width=size,
+            count=1, dtype='float32',
+            crs=geo_crs, transform=geo_transform,
+            nodata=-9999.0
+        ) as dst:
+            dst.write(resized_elevation.astype(np.float32), 1)
+
+        # --- In-memory PIL image stays 8-bit for downstream pixel lookups ---
+        # buildingsGenerator.py and get_world_dimensions() use getpixel() scaled by size_z/255
+        self.heightmap = Image.fromarray(resized_map, mode='L')
 
     def crop_dem_image(self,px_bound,height_map):
         cropped_image = height_map[px_bound["northwest"][1]:px_bound["southeast"][1], 

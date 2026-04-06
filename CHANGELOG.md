@@ -23,18 +23,15 @@ Terrain floor now starts at z=0; all terrain points have non-negative world-z co
 
 ---
 
-## Remaining Tasks
+## Fixed: Proper GeoTIFF with Georeferencing and 16-bit Encoding
 
-### Proper GeoTIFF with Georeferencing and 16-bit Encoding
+**File:** `scripts/utils/heightMapGenerator.py` — `generate_rgb_heightmap()`
 
-**File:** `scripts/utils/heightMapGenerator.py`
+The heightmap TIFF was previously saved as 8-bit grayscale via PIL with no georeferencing. This caused two issues: low elevation precision (~1.9m stairstepping over mountainous terrain) and no geographic metadata for GIS tools.
 
-The heightmap TIFF is currently saved as 8-bit grayscale via PIL with no georeferencing. Two changes are needed:
+**Changes:**
+1. **Upgraded to 16-bit** — The Gazebo heightmap TIF (`{model}_height_map.tif`) is now 16-bit unsigned int (0–65535) written via `rasterio`, reducing elevation stairstepping from ~1.9m to ~0.007m precision.
+2. **Added float32 elevation GeoTIFF** — A new `{model}_elevation.tif` contains actual AMSL elevation values (float32) for use in GIS tools (QGIS, GDAL).
+3. **Embedded CRS and affine transform** — Both output TIFFs include EPSG:4326 (WGS84) and a pixel-to-coordinate mapping derived from the region's true boundaries.
 
-1. **Upgrade to 16-bit** — Replace the 8-bit (0-255) TIFF with a 16-bit (0-65535) georeferenced GeoTIFF using `rasterio`, reducing elevation stairstepping from ~1.9m to ~0.007m precision.
-2. **Add a float32 elevation GeoTIFF** — Write a second `{model}_elevation.tif` with actual AMSL elevation values for use in GIS tools (QGIS, GDAL).
-3. **Embed CRS and affine transform** — Both output TIFFs should include EPSG:4326 and a pixel-to-coordinate mapping.
-
-The in-memory `self.heightmap` PIL image must remain 8-bit since downstream code (`buildingsGenerator.py`, `gazeboWorldGenerator.py`) relies on `getpixel()` scaled by `size_z / 255`.
-
-Full implementation details are in `FIXES_PLAN.md` under "Agent 2".
+The in-memory `self.heightmap` PIL image remains 8-bit since downstream code (`buildingsGenerator.py`, `gazeboWorldGenerator.py`) relies on `getpixel()` scaled by `size_z / 255`.
