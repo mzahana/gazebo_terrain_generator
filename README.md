@@ -25,6 +25,14 @@ A super easy-to-use tool for generate 3D Gazebo terrain using real-world elevati
 - **Configurable Output**: Flexible output paths via environment variables for different deployment scenarios
 - **Customizable Resolution**: Adjustable tile resolution.
 - **Complete World Generation**: Generates the entire model with no hassle out of the box
+- **High-Precision Terrain**: Supports 16-bit GeoTIFF heightmaps for smoother terrain and reduced stairstepping.
+
+## 🌟 Recent Improvements
+
+- **Zero-Altitude Terrain Base**: The terrain's lowest point is now always grounded at world $z=0$, ensuring compatibility with PX4 and other autopilots that require non-negative altitude.
+- **16-bit GeoTIFF Support**: Upgraded from 8-bit to 16-bit encoding for heightmaps, improving elevation precision from $\sim$1.9m to $\sim$0.007m.
+- **Georeferenced Metadata**: Generated TIFFs now include proper CRS (EPSG:4326) and affine transform metadata for direct use in GIS tools like QGIS and GDAL.
+- **Dual Export**: In addition to the Gazebo heightmap, a float32 elevation GeoTIFF containing actual AMSL values is now automatically generated.
 
 ## Supported and Tested Stack
 
@@ -60,7 +68,7 @@ export GAZEBO_WORLD_PATH="~/Desktop/gazebo_models/worlds"
 
 ```
 
-**Default Location**: If no environment variable is set, model and worlds files are saved to:
+- **Default Location**: If no environment variable is set, model and worlds files are saved to:
 ```
 Models saved in **~/gazebo_terrian_generator/output/gazebo_terrain/**
 World files in **~/gazebo_terrian_generator/output/gazebo_terrain/worlds**
@@ -77,7 +85,8 @@ Generated model follow this structure:
 │   ├── model.config           # Model configuration
 │   ├── model_name.sdf         # Gazebo world file
 │   └── textures/
-│       ├── world_name_height_map.tif    # Elevation heightmap
+│       ├── world_name_height_map.tif    # 16-bit Elevation heightmap
+│       ├── world_name_elevation.tif     # float32 GeoTIFF (AMSL meters)
 │       └── world_name_aerial.png        # Satellite imagery texture
 <GAZEBO_WORLD_PATH>/
 ├──model_name.sdf         # Gazebo world file
