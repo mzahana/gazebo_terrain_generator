@@ -185,6 +185,19 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
         FileWriter.write_world_file(template, self.model_name,launch_cord["latitude"],launch_cord["longitude"],os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name),launch_cord["altitude"],helipad_exist)
         FileWriter.write_world_file(template, self.model_name,launch_cord["latitude"],launch_cord["longitude"],globalParam.GAZEBO_WORLD_PATH,launch_cord["altitude"],helipad_exist)
 
+    def gen_px4_world(self) -> None:
+        """
+        Generate a PX4-compatible Gazebo world file with simulation plugins and proper camera view.
+        """
+        template = FileWriter.read_template(os.path.join(globalParam.TEMPLATE_DIR_PATH, 'px4_world.txt'))
+        launch_cord = self.get_launch_location()
+        FileWriter.write_px4_world_file(template, self.model_name, launch_cord["latitude"], launch_cord["longitude"],
+                                        os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name),
+                                        launch_cord["altitude"], self.size_x, self.size_y, self.size_z)
+        FileWriter.write_px4_world_file(template, self.model_name, launch_cord["latitude"], launch_cord["longitude"],
+                                        globalParam.GAZEBO_WORLD_PATH,
+                                        launch_cord["altitude"], self.size_x, self.size_y, self.size_z)
+
     def get_launch_pixelcord(self, south_west_bound, north_east_bound, width, height, launch_location):
         """
         Calculate pixel coordinates of launch location within heightmap.
@@ -301,6 +314,7 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
             self.gen_sdf(size_x,size_y,size_z,pose_x,posey,posez,self.include_buildings)
             maptile_utiles.dir_check(globalParam.GAZEBO_WORLD_PATH)
             self.gen_world()
+            self.gen_px4_world()
             print("Generate gazebo model files are save to : ",os.path.join(globalParam.GAZEBO_MODEL_PATH,os.path.basename(self.tile_path)))
             print("Generate gazebo world file are save to : ",globalParam.GAZEBO_WORLD_PATH)
             print("Gazebo world files generated successfully")

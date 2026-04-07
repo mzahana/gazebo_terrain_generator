@@ -276,6 +276,44 @@ class FileWriter:
 
 		
 	@staticmethod
+	def write_px4_world_file(sdf_template, model_name, launch_lat, launch_lon, path, origin_height, size_x, size_y, size_z):
+		'''
+		Write a PX4-compatible world file with proper camera pose for isometric view.
+
+		Args:
+			sdf_template (str): The template content for the PX4 world file.
+			model_name (str): The name of the model.
+			launch_lat (float): The launch latitude.
+			launch_lon (float): The launch longitude.
+			path (str): The directory path to save the world file.
+			origin_height (float): The origin elevation in meters.
+			size_x (float): Terrain size in x (meters).
+			size_y (float): Terrain size in y (meters).
+			size_z (float): Terrain elevation range (meters).
+		Returns:
+			None
+		'''
+		sdf_template = sdf_template.replace("$MODELNAME$", model_name)
+		sdf_template = sdf_template.replace("$ORIGIN_LAT$", str(launch_lat))
+		sdf_template = sdf_template.replace("$ORIGIN_LONG$", str(launch_lon))
+		sdf_template = sdf_template.replace("$ORIGIN_ELEVATION$", str(origin_height))
+
+		# Compute camera pose for a nice isometric view looking at the terrain center.
+		# Camera is placed behind and above the origin, looking down at ~35 degrees.
+		cam_distance = max(size_x, size_y) * 0.6
+		cam_x = -cam_distance * 0.7
+		cam_y = -cam_distance * 0.7
+		cam_z = cam_distance * 0.5 + size_z
+		sdf_template = sdf_template.replace("$CAM_X$", f"{cam_x:.1f}")
+		sdf_template = sdf_template.replace("$CAM_Y$", f"{cam_y:.1f}")
+		sdf_template = sdf_template.replace("$CAM_Z$", f"{cam_z:.1f}")
+
+		sdf_content = str(sdf_template)
+		target = open(os.path.join(path, model_name + "_px4.sdf"), "w")
+		target.write(sdf_content)
+		target.close()
+
+	@staticmethod
 	def write_world_file(sdf_template,model_name,launch_lat,launch_lon,path,origin_height,helipad_exist):
 		'''
 		Write a world file with the provided template and model details.

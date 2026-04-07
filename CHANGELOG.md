@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-04-07 — PX4-Compatible World SDF
+
+### Added: PX4-ready Gazebo world file (`_px4.sdf`)
+
+**Files:** `templates/px4_world.txt`, `scripts/utils/fileWriter.py`, `scripts/utils/gazeboWorldGenerator.py`
+
+The generator now produces an additional `<model_name>_px4.sdf` world file alongside the existing world SDF. This file is designed to be directly usable with PX4 SITL simulation in Gazebo Harmonic without manual editing.
+
+**What it includes:**
+- **ODE physics** at 250 Hz (`max_step_size=0.004`, matching PX4 SITL requirements).
+- **All PX4-required system plugins**: Physics, UserCommands, SceneBroadcaster, Contact, Imu, AirPressure, ApplyLinkWrench, NavSat, and Sensors (ogre2).
+- **GUI plugins**: 3D View, WorldControl (starts paused), WorldStats, and EntityTree.
+- **Dynamic isometric camera view**: Camera position is computed from terrain dimensions so the initial view shows the full terrain from a front-left isometric angle (~35° pitch), instead of the default side view that made it hard to see the terrain.
+- **Spherical coordinates** with the launch location's lat/lon/elevation.
+- Scene settings with shadows, no grid, and directional sunlight with realistic attenuation.
+
+The PX4 world file is saved to both the model directory and the worlds directory.
+
+---
+
 ## 2026-04-07 — Post-TERCOM Bug Fixes
 
 ### Fixed: Gazebo OGRE2 Terra crash on large heightmaps
