@@ -1,5 +1,61 @@
 # Changelog
 
+## 2026-04-07 — Post-TERCOM Bug Fixes
+
+### Fixed: Gazebo OGRE2 Terra crash on large heightmaps
+
+**Files:** `scripts/utils/heightMapGenerator.py`, `scripts/utils/param.py`
+
+After removing square clipping (rectangular region support), combined with DEM fallback to zoom 13 (coarser tiles covering a larger area), `get_nearest_map_size` could return 4097 (2^12+1). The OGRE2 Terra shadow mapper in gz-sim-7 asserts and aborts for heightmaps larger than 2049×2049:
+
+```
+Assertion `m_shadowStarts->getNumElements() >= (m_heightMapTex->getHeight() << 4u)' failed.
+```
+
+Added `globalParam.HEIGHTMAP_MAX_SIZE = 2049` and capped the output of `get_nearest_map_size` at this value. Physical world size in the SDF is set independently and is unaffected.
+
+---
+
+### Fixed: `<elevation>None</elevation>` written to world SDF
+
+**Files:** `scripts/utils/heightMapGenerator.py`, `scripts/utils/demTilesDownloader.py`, `scripts/server.py`
+
+`get_amsl` returned Python `None` when its DEM tile file was missing on disk. This `None` was silently string-interpolated into the SDF template, producing `<elevation>None</elevation>` and causing simulation failures.
+
+Root cause chain:
+1. DEM tiles at the requested zoom were not downloaded (401/404 from Mapbox).
+2. `metadata.json` still stored the requested (failed) zoom.
+3. `get_amsl` received that zoom, found no file, and returned `None` with no error.
+
+Fixes applied across three files:
+- **`demTilesDownloader.py`**: `download_dem_data` now returns the actual zoom used. If the requested zoom yields 0 tiles, it automatically retries at the fallback zoom 13.
+- **`server.py`**: Rewrites `dem_zoom` in `metadata.json` if a fallback zoom was used.
+- **`heightMapGenerator.py` — `get_amsl`**: Falls back to `globalParam.DEM_RESOLUTION` if the tile is missing at the requested zoom. Raises `FileNotFoundError` instead of returning `None`.
+
+---
+
+### Fixed: DEM tile download endpoint (401 Unauthorized / lossless PNG)
+
+**File:** `scripts/utils/demTilesDownloader.py`
+
+The Mapbox Raster Tiles API v1 endpoint (`/raster/v1/mapbox.mapbox-terrain-dem-v1/`) returned 401 Unauthorized because it requires a paid Mapbox plan beyond the free tier. A previous attempt to switch from `.webp` to `.png` on the same endpoint returned 404 (the tileset does not serve PNG). The hardcoded `sku=101CUGorpzzyK` parameter (a client-side SDK token) also caused server-to-server request rejections.
+
+Switched to the **Maps API v4** endpoint with `.pngraw`:
+```
+https://api.mapbox.com/v4/mapbox.terrain-rgb/{z}/{x}/{y}.pngraw?access_token=...
+```
+This endpoint is available on all Mapbox accounts (including free tier), returns lossless PNG, and uses the identical Terrain-RGB encoding. The `sku` parameter has been removed.
+
+---
+
+### Fixed: Heightmap generation used satellite zoom instead of DEM zoom
+
+**File:** `scripts/utils/gazeboWorldGenerator.py`
+
+`generate_gazebo_world` was calling `generate_rgb_heightmap(self.tile_path, self.boundaries, self.zoom_level)` where `self.zoom_level` is the satellite imagery zoom (e.g. 18). DEM tiles are stored under their own zoom directory (e.g. `/output/dem/15/`), so the heightmap generator looked for `/output/dem/18/` and crashed with `No such file or directory`. Fixed by passing `self.dem_zoom` instead.
+
+---
+
 ## 2026-04-07 — TERCOM/PX4 Simulation Readiness
 
 ### Fixed: Rectangular Region Support (UI and Backend)
@@ -38,13 +94,11 @@ The DEM was always downloaded and read at the hardcoded zoom level 13 (`globalPa
 
 ---
 
-### Fixed: DEM Tiles Downloaded as Lossless PNG
+### Fixed: DEM Tiles Downloaded as Lossless PNG (via Maps API v4)
 
 **File:** `scripts/utils/demTilesDownloader.py`
 
-DEM tiles were fetched as `.webp` (lossy compression). WebP quantization errors in the green channel produce ~25.6 m elevation noise; tile boundary seam artifacts were visible in stitched heightmaps.
-
-Changed the Mapbox Terrain DEM v1 tile URL from `.webp` to `.png` (lossless), eliminating quantization artifacts entirely.
+DEM tiles were fetched as `.webp` (lossy compression) from the Raster Tiles API v1 endpoint. The goal was to switch to lossless PNG to eliminate quantization artifacts (~25.6 m noise in the green channel, seam artifacts at tile boundaries). The initial fix used `.png` on the same endpoint, which returned 404. See the 2026-04-07 bug fix section above for the final resolution using the Maps API v4 `.pngraw` endpoint.
 
 ---
 

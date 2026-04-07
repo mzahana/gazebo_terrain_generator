@@ -285,7 +285,7 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
         if os.path.isfile(os.path.join(self.tile_path, 'metadata.json')) and self.tile_path != '':
             self.generate_ortho(self.tile_path,self.zoom_level,self.model_name,self.boundaries)
             print("Satellite image generated successfully")
-            self.generate_rgb_heightmap(self.tile_path,self.boundaries,self.zoom_level)
+            self.generate_rgb_heightmap(self.tile_path,self.boundaries,self.dem_zoom)
             (size_x,size_y,size_z,pose_x,posey,posez) = self.get_world_dimensions()
             if self.include_buildings:
                 origin_coord = self.get_true_origin()

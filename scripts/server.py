@@ -37,7 +37,17 @@ def process_end_download(bounds, zoom_level, outputDirectory, outputFile, filePa
 		FileWriter.close(lock, os.path.join(globalParam.OUTPUT_BASE_PATH, outputDirectory), filePath, zoom_level)
 		true_boundaries = maptile_utiles.get_true_boundaries(bounds, zoom_level)
 		dem_zoom = min(zoom_level, 15)
-		download_dem_data(true_boundaries, globalParam.DEM_PATH, zoom_range=(dem_zoom, dem_zoom))
+		actual_dem_zoom = download_dem_data(true_boundaries, globalParam.DEM_PATH, zoom_range=(dem_zoom, dem_zoom))
+		if actual_dem_zoom != dem_zoom:
+			# Fallback zoom was used — update metadata.json so GazeboTerrianGenerator reads the right zoom
+			import json as _json
+			meta_path = os.path.join(globalParam.OUTPUT_BASE_PATH, outputDirectory, 'metadata.json')
+			with open(meta_path, 'r') as _f:
+				_meta = _json.load(_f)
+			_meta['dem_zoom'] = actual_dem_zoom
+			with open(meta_path, 'w') as _f:
+				_json.dump(_meta, _f)
+			print(f"[INFO] DEM fallback: requested zoom {dem_zoom}, used zoom {actual_dem_zoom}. metadata.json updated.")
 		orthodir_path = os.path.join(globalParam.OUTPUT_BASE_PATH, outputDirectory)
 		model_path =  os.path.join(globalParam.GAZEBO_MODEL_PATH,os.path.basename(orthodir_path))
 		if include_buildings:

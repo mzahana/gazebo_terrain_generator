@@ -10,6 +10,9 @@ class globalParam:
     GAZEBO_WORLD_PATH           = os.path.abspath(os.path.expanduser(os.getenv('GAZEBO_WORLD_PATH', os.path.join(OUTPUT_BASE_PATH,'gazebo_terrain/worlds',))))  
     DEM_RESOLUTION              = 13
     DEM_BUILDING_RESOLUTION     = 15
+    # Gazebo OGRE2 Terra renderer (gz-sim-7) crashes with heightmaps larger than 2049×2049.
+    # 2^11 + 1 = 2049 is the maximum safe size.
+    HEIGHTMAP_MAX_SIZE          = 2049
 
 
     DEM_PATH                    = os.path.join(OUTPUT_BASE_PATH, 'dem')
@@ -21,3 +24,4 @@ class globalParam:
     
     # Free Mapbox API Key 
     MAPBOX_API_KEY               = "pk.eyJ1IjoiYXJhdmluZDE5NDAiLCJhIjoiY21jNDVyYTM5MDdxYjJqc2FjczA3bTBmeSJ9.kNLCV2BhlN0CRCOBJIpM1A"  
+    

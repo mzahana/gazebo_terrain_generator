@@ -30,11 +30,45 @@ Recommended implementation order: Task 6 → Task 3 → Task 5 → Task 2 → Ta
 ---
 
 ### Task 5 — Fix DEM Tile Download to Use Lossless Format
-**Status**: Done  
+**Status**: Superseded — switched to Maps API v4 with `.pngraw`  
 **Files changed**: `scripts/utils/demTilesDownloader.py`
 
-- Changed tile URL from `.webp` (lossy) to `.png` (lossless) in `download_tile_image`.
-- Eliminates quantization artifacts at tile boundaries caused by WebP compression.
+- Original plan changed `.webp` → `.png` on the Raster Tiles API v1 endpoint, which returned 404 (tileset has no `.png`).
+- Raster Tiles API v1 (`/raster/v1/mapbox.mapbox-terrain-dem-v1/`) also returned 401 Unauthorized because it requires a separate Mapbox plan beyond the free tier.
+- **Final fix**: switched to the Maps API v4 endpoint (`/v4/mapbox.terrain-rgb/{z}/{x}/{y}.pngraw`) which is accessible on all Mapbox accounts and returns lossless PNG — achieving the original lossless goal.
+- Removed the hardcoded `sku=101CUGorpzzyK` parameter (a client-side SDK token that caused rejections on server-to-server requests).
+
+---
+
+### Task 3 Bug Fix — `generate_rgb_heightmap` called with satellite zoom, not DEM zoom
+**Status**: Fixed  
+**Files changed**: `scripts/utils/gazeboWorldGenerator.py`
+
+- `generate_gazebo_world` was passing `self.zoom_level` (satellite zoom, e.g. 18) to `generate_rgb_heightmap`, causing it to look for DEM tiles in `/output/dem/18` instead of `/output/dem/15`.
+- Fixed by passing `self.dem_zoom` instead.
+
+---
+
+### Bug Fix — `<elevation>None</elevation>` written to world SDF
+**Status**: Fixed  
+**Files changed**: `scripts/utils/heightMapGenerator.py`, `scripts/utils/demTilesDownloader.py`, `scripts/server.py`
+
+- Root cause: `get_amsl` returned Python `None` when the DEM tile file was missing on disk. This was silently string-interpolated into the SDF template as the literal text `"None"`, producing `<elevation>None</elevation>` and breaking simulation.
+- Tile files were missing because: (a) zoom-15 tiles returned 401/404 so nothing was written to disk, yet `self.dem_zoom=15` was stored in metadata; (b) `get_amsl` had no fallback — it returned `None` instead of raising.
+- **`demTilesDownloader.py`**: `download_dem_data` now returns the actual zoom level used. If the requested zoom yields 0 successfully downloaded tiles, it automatically retries at `globalParam.DEM_RESOLUTION` (zoom 13).
+- **`server.py`**: Uses the returned actual zoom; if it differs from the requested zoom (fallback triggered), rewrites `dem_zoom` in `metadata.json` so `GazeboTerrianGenerator` reads the correct zoom.
+- **`heightMapGenerator.py` — `get_amsl`**: Now tries `globalParam.DEM_RESOLUTION` as fallback if the tile is missing at the requested zoom. Raises `FileNotFoundError` with a clear message instead of returning `None`.
+
+---
+
+### Bug Fix — Gazebo OGRE2 Terra crash on heightmaps larger than 2049×2049
+**Status**: Fixed  
+**Files changed**: `scripts/utils/heightMapGenerator.py`, `scripts/utils/param.py`
+
+- After removing square clipping (Tasks 1 & 2), rectangular regions combined with coarser DEM fallback tiles produced large stitched images. `get_nearest_map_size` returned 4097 (2^12+1) for these inputs.
+- Gazebo gz-sim-7 OGRE2 Terra renderer asserts `m_shadowStarts->getNumElements() >= (m_heightMapTex->getHeight() << 4u)` and crashes for heightmaps larger than 2049×2049.
+- Added `globalParam.HEIGHTMAP_MAX_SIZE = 2049` (2^11+1) and capped `get_nearest_map_size` output at this value.
+- Physical world dimensions in the SDF (`$SIZEX$ $SIZEY$`) are independent of image pixel count and are unaffected.
 
 ---
 

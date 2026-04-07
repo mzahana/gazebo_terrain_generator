@@ -48,8 +48,8 @@ def download_tile_image(args : tuple)-> None:
     """
     zoom, x, y, output_dir = args
     tile_url = (
-        f"https://api.mapbox.com/raster/v1/mapbox.mapbox-terrain-dem-v1/"
-        f"{zoom}/{x}/{y}.png?sku=101CUGorpzzyK&access_token={globalParam.MAPBOX_API_KEY}"
+        f"https://api.mapbox.com/v4/mapbox.terrain-rgb/"
+        f"{zoom}/{x}/{y}.pngraw?access_token={globalParam.MAPBOX_API_KEY}"
     )
     img = fetch_image_from_url(tile_url)
     if img is not None:
@@ -58,45 +58,80 @@ def download_tile_image(args : tuple)-> None:
     else:
         print(f"[WARN] Skipped tile ({x}, {y}) due to download error.")
 
-def download_dem_data(bound_array, output_directory, zoom_range: tuple = (globalParam.DEM_RESOLUTION,globalParam.DEM_RESOLUTION)) -> None:
+def _download_zoom(bound_array, output_directory, zoom) -> int:
+    """
+    Download DEM tiles for a single zoom level. Returns the number of tiles successfully downloaded.
+    """
+    nw_lat, nw_lon = map(float, bound_array["northwest"])
+    se_lat, se_lon = map(float, bound_array["southeast"])
+
+    nw_tilex, nw_tiley = maptile_utiles.lat_lon_to_tile(nw_lat, nw_lon, zoom)
+    se_tilex, se_tiley = maptile_utiles.lat_lon_to_tile(se_lat, se_lon, zoom)
+
+    tilex_start, tilex_end = sorted((nw_tilex, se_tilex))
+    tiley_start, tiley_end = sorted((nw_tiley, se_tiley))
+
+    zoom_dir = os.path.join(output_directory, str(zoom))
+    maptile_utiles.dir_check(zoom_dir)
+
+    tasks = []
+    for x in range(tilex_start, tilex_end + 1):
+        x_dir = os.path.join(zoom_dir, str(x))
+        maptile_utiles.dir_check(x_dir)
+        for y in range(tiley_start, tiley_end + 1):
+            dem_file = os.path.join(x_dir, f"{y}.png")
+            if not check_dem_file(dem_file):
+                tasks.append((zoom, x, y, x_dir))
+
+    if not tasks:
+        # All tiles already cached — count existing files as successes
+        return sum(
+            len([f for f in os.listdir(os.path.join(zoom_dir, str(x))) if f.endswith('.png')])
+            for x in range(tilex_start, tilex_end + 1)
+            if os.path.isdir(os.path.join(zoom_dir, str(x)))
+        )
+
+    with Pool(processes=cpu_count()) as pool:
+        pool.map(download_tile_image, tasks)
+
+    # Count files actually written
+    return sum(
+        len([f for f in os.listdir(os.path.join(zoom_dir, str(x))) if f.endswith('.png')])
+        for x in range(tilex_start, tilex_end + 1)
+        if os.path.isdir(os.path.join(zoom_dir, str(x)))
+    )
+
+
+def download_dem_data(bound_array, output_directory, zoom_range: tuple = (globalParam.DEM_RESOLUTION,globalParam.DEM_RESOLUTION)) -> int:
     """
     Download DEM data for a specified bounding box and zoom range.
+    Falls back to zoom 13 if the requested zoom yields no tiles (e.g. tileset has no coverage).
     Args:
-        bound_array (str): A string containing the bounding box coordinates in the format "lat1,lon1,lat2,lon2".
-        output_directory (str): The directory where the downloaded DEM tiles will be saved.
-        zoom_range (tuple): A tuple specifying the zoom levels to download (default is (10, 11)).
+        bound_array: Bounding box dict with 'northwest' and 'southeast' keys.
+        output_directory: Directory where downloaded DEM tiles will be saved.
+        zoom_range: Tuple of (min_zoom, max_zoom) to download.
     Returns:
-        None    
+        int: The zoom level that was actually used.
     """
+    FALLBACK_ZOOM = globalParam.DEM_RESOLUTION  # 13
     try:
-        tasks = []
-        nw_lat, nw_lon = map(float, bound_array["northwest"])
-        se_lat, se_lon = map(float, bound_array["southeast"])
         maptile_utiles.dir_check(output_directory)
 
         for zoom in range(zoom_range[0], zoom_range[1] + 1):
-            nw_tilex, nw_tiley = maptile_utiles.lat_lon_to_tile(nw_lat, nw_lon, zoom)
-            se_tilex, se_tiley = maptile_utiles.lat_lon_to_tile(se_lat, se_lon, zoom)
+            count = _download_zoom(bound_array, output_directory, zoom)
+            if count > 0:
+                return zoom
+            print(f"[WARN] No DEM tiles downloaded at zoom {zoom}. Falling back to zoom {FALLBACK_ZOOM}.")
 
-            tilex_start, tilex_end = sorted((nw_tilex, se_tilex))
-            tiley_start, tiley_end = sorted((nw_tiley, se_tiley))
+        # Requested zoom(s) yielded nothing — fall back to zoom 13
+        if zoom_range[0] != FALLBACK_ZOOM:
+            count = _download_zoom(bound_array, output_directory, FALLBACK_ZOOM)
+            if count > 0:
+                return FALLBACK_ZOOM
+            print(f"[ERROR] No DEM tiles downloaded at fallback zoom {FALLBACK_ZOOM} either.")
 
-            zoom_dir = os.path.join(output_directory, str(zoom))
-            maptile_utiles.dir_check(zoom_dir)
-
-            # Prepare all tile args
-            for x in range(tilex_start, tilex_end + 1):
-                x_dir = os.path.join(zoom_dir, str(x))
-                maptile_utiles.dir_check(x_dir)
-                for y in range(tiley_start, tiley_end + 1):
-                    dem_file = os.path.join(x_dir, f"{y}.png")
-                    if not check_dem_file(dem_file):
-
-                        tasks.append((zoom, x, y, x_dir))
-
-            # Use multiprocessing
-        with Pool(processes=cpu_count()) as pool:  # You can tune the number here
-            pool.map(download_tile_image, tasks)
+        return zoom_range[0]  # Return requested zoom even if empty; caller will handle error
 
     except Exception as e:
         print(f"Download failed: {e}")
+        return zoom_range[0]

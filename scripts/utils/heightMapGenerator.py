@@ -41,7 +41,24 @@ class HeightmapGenerator(ConcatImage):
         
 
     @staticmethod
-    def get_amsl(lat: float, lon: float, zoom: int = None):
+    def _read_elevation_from_tile(dem_tile_path: str, lat: float, lon: float, zoom: int) -> float:
+        """Read elevation in metres from a Terrain-RGB PNG tile."""
+        tile_x, tile_y = maptile_utiles.lat_lon_to_tile(lat, lon, zoom)
+        boundaries = maptile_utiles.get_tile_bounds(tile_x, tile_y, zoom)
+        lat_max = boundaries["northeast"][0]
+        lat_min = boundaries["southwest"][0]
+        lon_max = boundaries["northeast"][1]
+        lon_min = boundaries["southwest"][1]
+        dem_img = cv2.imread(dem_tile_path)
+        height, width = dem_img.shape[:2]
+        px = int((lon - lon_min) / (lon_max - lon_min) * width)
+        py = int((lat_max - lat) / (lat_max - lat_min) * height)
+        b, g, r = dem_img[py, px]
+        # Terrain-RGB encoding: https://docs.mapbox.com/data/tilesets/reference/mapbox-terrain-dem-v1/
+        return ((float(r) * 256 * 256 + float(g) * 256 + float(b)) * 0.1) - 10000
+
+    @staticmethod
+    def get_amsl(lat: float, lon: float, zoom: int = None) -> float:
         """
         Get the height above mean sea level (AMSL) for a given latitude and longitude.
         Args:
@@ -50,37 +67,29 @@ class HeightmapGenerator(ConcatImage):
             zoom (int): DEM tile zoom level. Defaults to globalParam.DEM_RESOLUTION.
         Returns:
             float: Height above mean sea level in meters.
+        Raises:
+            FileNotFoundError: If no DEM tile is available at the requested zoom or the fallback zoom.
         """
         if zoom is None:
             zoom = globalParam.DEM_RESOLUTION
-        tile_x,tile_y = maptile_utiles.lat_lon_to_tile(lat, lon, zoom)
-        boundaries = maptile_utiles.get_tile_bounds(tile_x, tile_y, zoom)
-        # check if tile exist
-        lat_max = boundaries["northeast"][0]
-        lat_min = boundaries["southwest"][0]
-        lon_max = boundaries["northeast"][1]
-        lon_min = boundaries["southwest"][1]
-        dem_tile_path = os.path.join(globalParam.DEM_PATH, str(zoom), str(tile_x), str(tile_y)+'.png')
-        if os.path.isfile(dem_tile_path) == True:
-            # read the image from the tile its a gbr image format
-            dem_img = cv2.imread(dem_tile_path)
-            #get the size of the image
-            height,width = dem_img.shape[:2]
-            # from boundaries and the desiderd lat long get the pixel coordinates
-            px = int((lon - lon_min) / (lon_max - lon_min) * width)
-            py = int((lat_max - lat) / (lat_max - lat_min) * height)
-            # from pixel read the image and get the height
-            b,g,r = dem_img[py,px]
-            b,g,r = float(b), float(g), float(r)
-            # convert the pixel value to height
-            # reference : https://docs.mapbox.com/data/tilesets/reference/mapbox-terrain-dem-v1/
-            height = ((r * 256 * 256 + g * 256 + b) * 0.1) - 10000
-            return height
 
-        else :
-            # raise an error and kill the program
-            print("Tile not found",tile_x,tile_y,zoom,lat,lon)
-            return None
+        zooms_to_try = [zoom]
+        if zoom != globalParam.DEM_RESOLUTION:
+            zooms_to_try.append(globalParam.DEM_RESOLUTION)
+
+        for z in zooms_to_try:
+            tile_x, tile_y = maptile_utiles.lat_lon_to_tile(lat, lon, z)
+            dem_tile_path = os.path.join(globalParam.DEM_PATH, str(z), str(tile_x), str(tile_y) + '.png')
+            if os.path.isfile(dem_tile_path):
+                if z != zoom:
+                    print(f"[WARN] get_amsl: tile not found at zoom {zoom}, using zoom {z} fallback.")
+                return HeightmapGenerator._read_elevation_from_tile(dem_tile_path, lat, lon, z)
+
+        raise FileNotFoundError(
+            f"get_amsl: no DEM tile found for lat={lat}, lon={lon} "
+            f"at zoom {zoom} or fallback zoom {globalParam.DEM_RESOLUTION}. "
+            "Ensure DEM tiles have been downloaded successfully."
+        )
 
     
 
@@ -113,6 +122,11 @@ class HeightmapGenerator(ConcatImage):
             for img in os.listdir(temp_output_dir) if img.endswith('.png')
         ])            
         images = [cv2.imread(path) for path in image_list]
+        if not images:
+            raise RuntimeError(
+                f"No DEM tiles found in {image_dir} at zoom {zoomlevel}. "
+                "Check that DEM tiles downloaded successfully."
+            )
         filtered_images = [images[0]]
 
         for img in images[1:]:
@@ -140,17 +154,15 @@ class HeightmapGenerator(ConcatImage):
 
         height_img_normalized = ((height_map - np.min(height_map)) / (np.max(height_map) - np.min(height_map)) * 255).astype(np.uint8)
 
-        def get_nearest_map_size(height,width):
+        def get_nearest_map_size(height, width):
             value = max(height, width)
             n = math.log2(value - 1)
-            # Get floor and ceil values of n
             n_ceil = int(math.ceil(n))
-
             size_upper = (2 ** n_ceil) + 1
+            # Gazebo OGRE2 Terra (gz-sim-7) crashes on heightmaps larger than 2049×2049.
+            return min(size_upper, globalParam.HEIGHTMAP_MAX_SIZE)
 
-            return size_upper
-        
-        size = get_nearest_map_size(height,width)
+        size = get_nearest_map_size(height, width)
         resized_map  = cv2.resize(height_img_normalized, (size,size), interpolation=cv2.INTER_LINEAR)
 
         model = os.path.basename(model_path)
