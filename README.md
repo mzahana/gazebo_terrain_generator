@@ -20,19 +20,24 @@ A super easy-to-use tool for generate 3D Gazebo terrain using real-world elevati
 ## Features
 
 - **Real-World Terrain Generation**: Generate 3D Gazebo worlds using actual elevation data and satellite images of any location on Earth.
-- **3D Buildings**: Add or remove buildings to the gazebo world with a toogle button.
-- **Configurable Spawn Location**: Change the spawn location using interactive UI marker within the region of interest
-- **Configurable Output**: Flexible output paths via environment variables for different deployment scenarios
-- **Customizable Resolution**: Adjustable tile resolution.
-- **Complete World Generation**: Generates the entire model with no hassle out of the box
-- **High-Precision Terrain**: Supports 16-bit GeoTIFF heightmaps for smoother terrain and reduced stairstepping.
+- **Rectangular Region Support**: Select any rectangular (non-square) region — the full area is preserved end-to-end.
+- **3D Buildings**: Add or remove buildings to the Gazebo world with a toggle button.
+- **Configurable Spawn Location**: Change the spawn location using an interactive UI marker within the region of interest.
+- **Configurable Output**: Flexible output paths via environment variables for different deployment scenarios.
+- **Customizable Resolution**: Adjustable tile zoom level (up to zoom 15, ~2.4 m/px DEM resolution).
+- **Complete World Generation**: Generates the entire model with no hassle out of the box.
+- **High-Precision Terrain**: 16-bit GeoTIFF heightmaps with lossless DEM tiles for smoother terrain and reduced stairstepping.
+- **TERCOM/PX4 Ready**: Exports a UTM-projected `_tercom_dem.tif` and sidecar JSON for use as a TERCOM reference map with PX4 simulation.
 
 ## 🌟 Recent Improvements
 
-- **Zero-Altitude Terrain Base**: The terrain's lowest point is now always grounded at world $z=0$, ensuring compatibility with PX4 and other autopilots that require non-negative altitude.
+- **Rectangular Region Support**: The tool now correctly handles non-square regions. Previously, any rectangular selection was silently clipped to a square. Rectangular flight corridors are fully supported end-to-end.
+- **TERCOM-Ready Elevation Export**: A `_tercom_dem.tif` in the local UTM projection (metre-based pixel spacing, undistorted) is generated alongside the Gazebo heightmap — ready for use as a TERCOM reference map with PX4.
+- **DEM Resolution Follows UI Zoom**: The terrain DEM is now downloaded and processed at the zoom level selected in the UI (up to zoom 15, ~2.4 m/px), instead of always using the hardcoded zoom 13.
+- **Lossless DEM Tiles**: DEM tiles are now fetched as PNG (lossless) instead of WebP (lossy), eliminating quantization noise and tile boundary seam artifacts in the heightmap.
+- **Zero-Altitude Terrain Base**: The terrain's lowest point is always grounded at world $z=0$, ensuring compatibility with PX4 and other autopilots that require non-negative altitude.
 - **16-bit GeoTIFF Support**: Upgraded from 8-bit to 16-bit encoding for heightmaps, improving elevation precision from $\sim$1.9m to $\sim$0.007m.
-- **Georeferenced Metadata**: Generated TIFFs now include proper CRS (EPSG:4326) and affine transform metadata for direct use in GIS tools like QGIS and GDAL.
-- **Dual Export**: In addition to the Gazebo heightmap, a float32 elevation GeoTIFF containing actual AMSL values is now automatically generated.
+- **Georeferenced Metadata**: Generated TIFFs include proper CRS and affine transform metadata for direct use in GIS tools like QGIS and GDAL.
 
 ## Supported and Tested Stack
 
@@ -81,18 +86,18 @@ Generated model follow this structure:
 ```
 <GAZEBO_MODEL_PATH>/
 ├── model_name/
-│   ├── model.sdf              # Gazebo model definition
-│   ├── model.config           # Model configuration
-│   ├── model_name.sdf         # Gazebo world file
+│   ├── model.sdf                          # Gazebo model definition
+│   ├── model.config                       # Model configuration
+│   ├── model_name.sdf                     # Gazebo world file
 │   └── textures/
-│       ├── world_name_height_map.tif    # 16-bit Elevation heightmap
-│       ├── world_name_elevation.tif     # float32 GeoTIFF (AMSL meters)
-│       └── world_name_aerial.png        # Satellite imagery texture
+│       ├── model_name_height_map.tif      # 16-bit heightmap (square 2^n+1, EPSG:4326) — used by Gazebo
+│       ├── model_name_tercom_dem.tif      # float32 elevation GeoTIFF (UTM CRS, native resolution) — for TERCOM
+│       ├── model_name_tercom_dem.json     # Sidecar: vertical datum, CRS, zoom, bounds, elevation range
+│       └── model_name_aerial.png          # Satellite imagery texture
 <GAZEBO_WORLD_PATH>/
-├──model_name.sdf         # Gazebo world file
-├──model_name_1.sdf       # Gazebo world file
-├──model_name_2.sdf       # Gazebo world file
-
+├── model_name.sdf
+├── model_name_1.sdf
+└── model_name_2.sdf
 ```
 
 ## 🚀 Run Gazebo World Generator

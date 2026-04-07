@@ -36,7 +36,8 @@ def process_end_download(bounds, zoom_level, outputDirectory, outputFile, filePa
 		#Perform the long-running task
 		FileWriter.close(lock, os.path.join(globalParam.OUTPUT_BASE_PATH, outputDirectory), filePath, zoom_level)
 		true_boundaries = maptile_utiles.get_true_boundaries(bounds, zoom_level)
-		download_dem_data(true_boundaries, globalParam.DEM_PATH)
+		dem_zoom = min(zoom_level, 15)
+		download_dem_data(true_boundaries, globalParam.DEM_PATH, zoom_range=(dem_zoom, dem_zoom))
 		orthodir_path = os.path.join(globalParam.OUTPUT_BASE_PATH, outputDirectory)
 		model_path =  os.path.join(globalParam.GAZEBO_MODEL_PATH,os.path.basename(orthodir_path))
 		if include_buildings:
@@ -152,10 +153,11 @@ def start_download():
 	outputFile = outputFile.replace("{timestamp}", str(timestamp))
 	filePath = os.path.join(globalParam.OUTPUT_BASE_PATH, outputDirectory, outputFile)
 
+	dem_zoom = min(zoom_level, 15)
 	FileWriter.addMetadata(
 		lock, os.path.join(globalParam.OUTPUT_BASE_PATH, outputDirectory), filePath, outputFile,
 		"Map Tiles Downloader via AliFlux", "jpg", bounds, center, area_rect,
-		zoom_level, "mercator", 256 * outputScale, launchLocation=launchLocation
+		zoom_level, dem_zoom, "mercator", 256 * outputScale, launchLocation=launchLocation
 	)
 	global task_status
 	task_status = {"status": "idle"} 

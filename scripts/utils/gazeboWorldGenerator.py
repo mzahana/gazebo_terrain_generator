@@ -78,6 +78,7 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
             self.boundaries = data["bounds"]
             self.launch_location = data["launch_location"]
             self.zoom_level = data["zoom_level"]
+            self.dem_zoom = data.get("dem_zoom", globalParam.DEM_RESOLUTION)
         self.model_name = os.path.basename(self.tile_path)
 
 
@@ -117,7 +118,7 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
         return {
             "latitude": origin_lat,
             "longitude": origin_lon,
-            "altitude": HeightmapGenerator.get_amsl(origin_lat, origin_lon)
+            "altitude": HeightmapGenerator.get_amsl(origin_lat, origin_lon, self.dem_zoom)
         }
 
     def get_launch_location(self) -> list:
@@ -132,7 +133,7 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
         return {
             "latitude": float(location_array[1]),
             "longitude": float(location_array[0]),
-            "altitude": HeightmapGenerator.get_amsl(float(location_array[1]), float(location_array[0]))
+            "altitude": HeightmapGenerator.get_amsl(float(location_array[1]), float(location_array[0]), self.dem_zoom)
             }
 
     def gen_sdf(self, size_x: float, size_y: float, size_z: float, pose_x: float, pose_y: float, pose_z: float, include_buildings : bool) -> None:

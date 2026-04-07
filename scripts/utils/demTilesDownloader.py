@@ -49,7 +49,7 @@ def download_tile_image(args : tuple)-> None:
     zoom, x, y, output_dir = args
     tile_url = (
         f"https://api.mapbox.com/raster/v1/mapbox.mapbox-terrain-dem-v1/"
-        f"{zoom}/{x}/{y}.webp?sku=101CUGorpzzyK&access_token={globalParam.MAPBOX_API_KEY}"
+        f"{zoom}/{x}/{y}.png?sku=101CUGorpzzyK&access_token={globalParam.MAPBOX_API_KEY}"
     )
     img = fetch_image_from_url(tile_url)
     if img is not None:

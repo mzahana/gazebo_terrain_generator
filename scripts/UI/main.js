@@ -170,27 +170,12 @@ $(function() {
 				});
 				console.log("Calculated dimensions - width:", width, "height:", height);
 				
-				var tileBounds;
-				if (height !== width) {
-					// Make it square by taking the minimum dimension
-					var squareSize = Math.min(height, width);
-					console.log("Making square with size:", squareSize);
-					
-					// Start from northwest corner and extend square size
-					tileBounds = {
-						"northwest": [nw_tile_x, nw_tile_y],
-						"northeast": [nw_tile_x + squareSize, nw_tile_y],
-						"southwest": [nw_tile_x, nw_tile_y + squareSize],
-						"southeast": [nw_tile_x + squareSize, nw_tile_y + squareSize]
-					};
-				} else {
-					tileBounds = {
-						"northwest": [nw_tile_x, nw_tile_y],
-						"northeast": [ne_tile_x, ne_tile_y],
-						"southwest": [sw_tile_x, sw_tile_y],
-						"southeast": [se_tile_x, se_tile_y]
-					};
-				}
+				var tileBounds = {
+					"northwest": [nw_tile_x, nw_tile_y],
+					"northeast": [ne_tile_x, nw_tile_y],
+					"southwest": [nw_tile_x, sw_tile_y],
+					"southeast": [ne_tile_x, sw_tile_y]
+				};
 				
 				console.log("Final tile bounds:", tileBounds);
 				
@@ -256,17 +241,17 @@ $(function() {
 				removeLaunchPadMarker();
 				createLaunchPadMarker();
 
-				// Calculate and show square dimensions
-				var squareTileWidth = Math.abs(tileBounds.northeast[0] - tileBounds.northwest[0]);
-				var squareTileHeight = Math.abs(tileBounds.southwest[1] - tileBounds.northwest[1]);
-				var tilesInSquare = squareTileWidth * squareTileHeight;
-				
+				// Calculate and show tile dimensions
+				var tileWidth = Math.abs(tileBounds.northeast[0] - tileBounds.northwest[0]);
+				var tileHeight = Math.abs(tileBounds.southwest[1] - tileBounds.northwest[1]);
+				var totalTiles = tileWidth * tileHeight;
+
 				// Clear any pending messages first
 				M.Toast.dismissAll();
-				
+
 				// Show success message with details
 				M.toast({
-					html: `Area snapped to a Square (${tilesInSquare} tiles total)`, 
+					html: `Area selected: ${tileWidth} × ${tileHeight} tiles (${totalTiles} total)`,
 					displayLength: 4000
 				});
 			}

@@ -42,24 +42,12 @@ class maptile_utiles:
         se_tile_x,se_tile_y = maptile_utiles.lat_lon_to_tile(se[0],se[1],zoom)
 
 
-        height,width = abs(nw_tile_x - ne_tile_x), abs(sw_tile_y-nw_tile_y)
-        if height != width:
-            max_x_tile = nw_tile_x + min(height,width)
-            max_y_tile = nw_tile_y + min(height,width)
-
-            return{ 
-                    "southwest": (sw_tile_x, max_y_tile),
-                    "southeast": (max_x_tile, se_tile_y ),
-                    "northwest": (nw_tile_x,nw_tile_y),  
-                    "northeast": (max_x_tile, nw_tile_y)
-                }
-        
-        return{ 
-                "southwest": (sw_tile_x, sw_tile_y),
-                "southeast": (se_tile_x, se_tile_y ),
-                "northwest": (nw_tile_x,nw_tile_y),  
-                "northeast": (ne_tile_x, nw_tile_y)
-                }
+        return {
+            "southwest": (sw_tile_x, sw_tile_y),
+            "southeast": (se_tile_x, se_tile_y),
+            "northwest": (nw_tile_x, nw_tile_y),
+            "northeast": (ne_tile_x, ne_tile_y)
+        }
     
     @staticmethod
     def get_true_boundaries(bound_array : str,zoom):

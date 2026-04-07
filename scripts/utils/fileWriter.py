@@ -38,7 +38,7 @@ class FileWriter:
 		return directory
 
 	@staticmethod
-	def addMetadata(lock, path, file, name, description, format, bounds, center, area, zoom_level, profile="mercator", tileSize=256, launchLocation=None):
+	def addMetadata(lock, path, file, name, description, format, bounds, center, area, zoom_level, dem_zoom, profile="mercator", tileSize=256, launchLocation=None):
 		'''
         Add metadata to the specified path as a JSON file.
 
@@ -53,6 +53,7 @@ class FileWriter:
             center (list): The center metadata as a list of float values.
             area (str): The area metadata.
             zoom_level (int): The zoom_level metadata.
+            dem_zoom (int): The DEM tile zoom level used for download (capped at 15).
             profile (str, optional): The profile metadata. Defaults to "mercator".
             tileSize (int, optional): The tileSize metadata. Defaults to 256.
 
@@ -64,14 +65,15 @@ class FileWriter:
 		data = [
 			("name", name),
 			("description", description),
-			("format", format), 
-			("bounds", ','.join(map(str, bounds))), 
-			("center", ','.join(map(str, center))), 
-			("zoom_level", zoom_level), 
-			("profile", profile), 
-			("tilesize", str(tileSize)), 
+			("format", format),
+			("bounds", ','.join(map(str, bounds))),
+			("center", ','.join(map(str, center))),
+			("zoom_level", zoom_level),
+			("dem_zoom", dem_zoom),
+			("profile", profile),
+			("tilesize", str(tileSize)),
 			("area",area),
-			("scheme", "xyz"), 
+			("scheme", "xyz"),
 			("generator", "EliteMapper by Visor Dynamics"),
 			("type", "overlay"),
 			("attribution", "EliteMapper by Visor Dynamics"),

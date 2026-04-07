@@ -1,5 +1,6 @@
 import cv2
 import os
+import json
 import numpy as np
 import math
 from PIL import Image
@@ -7,6 +8,7 @@ from multiprocessing import Pool, cpu_count
 import rasterio
 from rasterio.transform import from_bounds
 from rasterio.crs import CRS as RasterioCRS
+from rasterio.warp import reproject, Resampling, calculate_default_transform
 
 from utils.maptileUtils import maptile_utiles
 from utils.utils import ConcatImage
@@ -39,23 +41,26 @@ class HeightmapGenerator(ConcatImage):
         
 
     @staticmethod
-    def get_amsl(lat: float, lon: float):
+    def get_amsl(lat: float, lon: float, zoom: int = None):
         """
         Get the height above mean sea level (AMSL) for a given latitude and longitude.
         Args:
             lat (float): Latitude in degrees.
             lon (float): Longitude in degrees.
+            zoom (int): DEM tile zoom level. Defaults to globalParam.DEM_RESOLUTION.
         Returns:
             float: Height above mean sea level in meters.
         """
-        tile_x,tile_y = maptile_utiles.lat_lon_to_tile(lat, lon,globalParam.DEM_RESOLUTION)
-        boundaries = maptile_utiles.get_tile_bounds(tile_x, tile_y, globalParam.DEM_RESOLUTION)
+        if zoom is None:
+            zoom = globalParam.DEM_RESOLUTION
+        tile_x,tile_y = maptile_utiles.lat_lon_to_tile(lat, lon, zoom)
+        boundaries = maptile_utiles.get_tile_bounds(tile_x, tile_y, zoom)
         # check if tile exist
         lat_max = boundaries["northeast"][0]
         lat_min = boundaries["southwest"][0]
         lon_max = boundaries["northeast"][1]
         lon_min = boundaries["southwest"][1]
-        dem_tile_path = os.path.join(globalParam.DEM_PATH, str(globalParam.DEM_RESOLUTION), str(tile_x), str(tile_y)+'.png')
+        dem_tile_path = os.path.join(globalParam.DEM_PATH, str(zoom), str(tile_x), str(tile_y)+'.png')
         if os.path.isfile(dem_tile_path) == True:
             # read the image from the tile its a gbr image format
             dem_img = cv2.imread(dem_tile_path)
@@ -65,17 +70,16 @@ class HeightmapGenerator(ConcatImage):
             px = int((lon - lon_min) / (lon_max - lon_min) * width)
             py = int((lat_max - lat) / (lat_max - lat_min) * height)
             # from pixel read the image and get the height
-            b,g,r = dem_img[py,px]  
+            b,g,r = dem_img[py,px]
             b,g,r = float(b), float(g), float(r)
-            # convert the pixel value to height 
+            # convert the pixel value to height
             # reference : https://docs.mapbox.com/data/tilesets/reference/mapbox-terrain-dem-v1/
             height = ((r * 256 * 256 + g * 256 + b) * 0.1) - 10000
             return height
 
         else :
             # raise an error and kill the program
-
-            print("Tile not found",tile_x,tile_y,globalParam.DEM_RESOLUTION,lat,lon)
+            print("Tile not found",tile_x,tile_y,zoom,lat,lon)
             return None
 
     
@@ -88,8 +92,8 @@ class HeightmapGenerator(ConcatImage):
         true_bound_array = [true_boundaries["southwest"][1], true_boundaries["southwest"][0],
                             true_boundaries["northeast"][1], true_boundaries["northeast"][0]]
         
-        tile_number_boundaries = maptile_utiles.get_max_tilenumber(true_bound_array,globalParam.DEM_RESOLUTION)
-        image_dir = os.path.join(globalParam.DEM_PATH, str(globalParam.DEM_RESOLUTION))
+        tile_number_boundaries = maptile_utiles.get_max_tilenumber(true_bound_array, zoomlevel)
+        image_dir = os.path.join(globalParam.DEM_PATH, str(zoomlevel))
         image_dir_list = self.get_x_tile_directories(image_dir,tile_number_boundaries)
 
         temp_output_dir = os.path.join(globalParam.TEMP_PATH, 'heightmap')
@@ -118,7 +122,7 @@ class HeightmapGenerator(ConcatImage):
         
         cv2.imwrite(os.path.join(temp_output_dir, 'height_map.png'),stitched_image)
 
-        tile_boundaries = maptile_utiles.get_true_boundaries(true_bound_array,globalParam.DEM_RESOLUTION)
+        tile_boundaries = maptile_utiles.get_true_boundaries(true_bound_array, zoomlevel)
 
         height,width = stitched_image.shape[:2]
         crop_px_cord = self.get_dem_px_bounds(true_boundaries,tile_boundaries,height,width)
@@ -174,17 +178,69 @@ class HeightmapGenerator(ConcatImage):
         ) as dst:
             dst.write(resized_16bit, 1)
 
-        # --- Output 2: Elevation GeoTIFF (float32 actual AMSL values, georeferenced) ---
-        resized_elevation = cv2.resize(height_map, (size, size), interpolation=cv2.INTER_LINEAR)
-        elevation_tif_path = os.path.join(textures_dir, model + '_elevation.tif')
+        # --- Output 2: TERCOM elevation GeoTIFF (float32 AMSL, UTM projected, native resolution) ---
+        # Reproject height_map to the local UTM zone BEFORE any Gazebo square resize,
+        # so pixel spacing is uniform in meters and coordinates are undistorted.
+        nat_h, nat_w = height_map.shape
+        src_crs = RasterioCRS.from_epsg(4326)
+        src_transform = from_bounds(west, south, east, north, nat_w, nat_h)
+
+        center_lon = (west + east) / 2.0
+        center_lat = (south + north) / 2.0
+        utm_zone = int((center_lon + 180.0) / 6.0) + 1
+        epsg_utm = 32600 + utm_zone if center_lat >= 0 else 32700 + utm_zone
+        utm_crs = RasterioCRS.from_epsg(epsg_utm)
+
+        utm_transform, utm_w, utm_h = calculate_default_transform(
+            src_crs, utm_crs, nat_w, nat_h, left=west, bottom=south, right=east, top=north
+        )
+        utm_elevation = np.full((utm_h, utm_w), -9999.0, dtype=np.float32)
+        reproject(
+            source=height_map.astype(np.float32),
+            destination=utm_elevation,
+            src_transform=src_transform,
+            src_crs=src_crs,
+            dst_transform=utm_transform,
+            dst_crs=utm_crs,
+            resampling=Resampling.bilinear,
+            src_nodata=-9999.0,
+            dst_nodata=-9999.0,
+        )
+
+        tercom_tif_path = os.path.join(textures_dir, model + '_tercom_dem.tif')
         with rasterio.open(
-            elevation_tif_path, 'w',
-            driver='GTiff', height=size, width=size,
+            tercom_tif_path, 'w',
+            driver='GTiff', height=utm_h, width=utm_w,
             count=1, dtype='float32',
-            crs=geo_crs, transform=geo_transform,
-            nodata=-9999.0
+            crs=utm_crs, transform=utm_transform,
+            nodata=-9999.0,
         ) as dst:
-            dst.write(resized_elevation.astype(np.float32), 1)
+            dst.write(utm_elevation, 1)
+
+        valid_elevations = utm_elevation[utm_elevation != -9999.0]
+        pixel_size_m = utm_transform.a  # cell width in metres (square pixels)
+        tercom_meta = {
+            "vertical_datum": "EGM96 (orthometric / MSL)",
+            "horizontal_crs": f"EPSG:{epsg_utm}",
+            "source": "Mapbox Terrain DEM v1",
+            "source_zoom": zoomlevel,
+            "geographic_bounds": {
+                "west": west, "south": south, "east": east, "north": north
+            },
+            "elevation_range_m": {
+                "min": float(np.min(valid_elevations)) if valid_elevations.size else None,
+                "max": float(np.max(valid_elevations)) if valid_elevations.size else None,
+            },
+            "pixel_size_m": pixel_size_m,
+            "note": (
+                "PX4 barometer references MSL (consistent with EGM96). "
+                "GPS altitude uses WGS84 ellipsoidal height — apply geoid correction "
+                "if using GPS altitude directly."
+            ),
+        }
+        tercom_meta_path = os.path.join(textures_dir, model + '_tercom_dem.json')
+        with open(tercom_meta_path, 'w') as f:
+            json.dump(tercom_meta, f, indent=2)
 
         # --- In-memory PIL image stays 8-bit for downstream pixel lookups ---
         # buildingsGenerator.py and get_world_dimensions() use getpixel() scaled by size_z/255
