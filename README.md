@@ -65,22 +65,7 @@ Make sure your virtual environment is active, then install all required Python p
 
 ## ⚙️ Configuration
 
-### Environment Variables
 
-You can customize where Gazebo Models and World are saved using environment variables:
-
-```bash
-export GAZEBO_MODEL_PATH="~/Desktop/gazebo_models"
-export GAZEBO_WORLD_PATH="~/Desktop/gazebo_models/worlds"
-
-```
-
-- **Default Location**: If no environment variable is set, model and worlds files are saved to:
-```
-Models saved in **~/gazebo_terrian_generator/output/gazebo_terrain/**
-World files in **~/gazebo_terrian_generator/output/gazebo_terrain/worlds**
-
-```
 
 ### File Structure
 

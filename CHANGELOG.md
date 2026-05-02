@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-05-02 — Square Geographic Bounding Box & PX4 Vertical Offset Toggle
+
+### Added: Square Geographic Bounding Box Enforcement
+
+**Files:** `scripts/UI/main.js`, `scripts/utils/gazeboWorldGenerator.py`, `scripts/utils/heightMapGenerator.py`
+
+To fix Gazebo's visual map stretching issue (Gazebo requires perfectly square terrain images), the WebUI now automatically enforces a perfect geographic square bounding box using `turf.js`. When a user draws a region, it instantly snaps to the largest square dimension. 
+
+On the backend, `gazeboWorldGenerator.py` and `heightMapGenerator.py` are updated to precisely crop the downloaded Mapbox tiles to this exact square boundary, using sub-pixel Web Mercator calculations. This ensures Gazebo accurately renders the map 1:1 without any distortion or alignment drift.
+
+---
+
+### Added: PX4 SITL Compatibility Toggle & NavSat Elevation Fix
+
+**Files:** `scripts/UI/index.html`, `scripts/UI/main.js`, `scripts/server.py`, `scripts/utils/gazeboWorldGenerator.py`, `scripts/utils/fileWriter.py`
+
+Added a UI toggle for "PX4 SITL Compatible (Apply Vertical Offset)". 
+- **If Enabled (Default):** The terrain is shifted down so the lowest point is at `Z=0` in Gazebo, preventing negative spawn coordinates for PX4 SITL. 
+- **If Disabled:** The terrain is placed precisely at its true AMSL altitude in Gazebo.
+
+**Bug Fix:** Fixed an issue where the Gazebo world `origin_elevation` was being incorrectly written as the `launch_altitude` instead of the `min_height` when the terrain was shifted to `Z=0`. This caused the Gazebo NavSat plugin to double-count altitude, producing massive errors in GPS altitude sent to PX4. The `origin_elevation` is now perfectly mathematically aligned depending on the PX4 Compatibility mode.
+
+**Bug Fix (UI & Backend):** Resolved a `TypeError` (`object.__init__() takes exactly one argument`) by refactoring the `GazeboTerrianGenerator` instantiation to avoid redundant argument propagation in the Python MRO chain. Also fixed an issue where the generation sidebar in the Web UI appeared transparent or failed to show progress by adding an explicit background color and z-index to the sidebar CSS.
+
+---
 ## 2026-04-07 — PX4-Compatible World SDF
 
 ### Added: PX4-ready Gazebo world file (`_px4.sdf`)

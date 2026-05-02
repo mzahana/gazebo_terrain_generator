@@ -136,10 +136,17 @@ class HeightmapGenerator(ConcatImage):
         
         cv2.imwrite(os.path.join(temp_output_dir, 'height_map.png'),stitched_image)
 
-        tile_boundaries = maptile_utiles.get_true_boundaries(true_bound_array, zoomlevel)
+        tile_boundaries = maptile_utiles.get_true_boundaries(bound_array, zoomlevel)
+        
+        ui_bounds = {
+            "southwest": (float(bound_array[1]), float(bound_array[0])),
+            "southeast": (float(bound_array[1]), float(bound_array[2])),
+            "northwest": (float(bound_array[3]), float(bound_array[0])),
+            "northeast": (float(bound_array[3]), float(bound_array[2]))
+        }
 
         height,width = stitched_image.shape[:2]
-        crop_px_cord = self.get_dem_px_bounds(true_boundaries,tile_boundaries,height,width)
+        crop_px_cord = self.get_dem_px_bounds(ui_bounds,tile_boundaries,height,width)
         # Crop the image based on the true boundaries needed
         cropped_image = self.crop_dem_image(crop_px_cord,stitched_image) 
         height,width = cropped_image.shape[:2]
@@ -168,11 +175,11 @@ class HeightmapGenerator(ConcatImage):
         model = os.path.basename(model_path)
         textures_dir = os.path.join(globalParam.GAZEBO_MODEL_PATH, model, 'textures')
 
-        # Geographic bounds from the true boundaries of this region
-        west  = true_boundaries['southwest'][1]   # min longitude
-        south = true_boundaries['southwest'][0]   # min latitude
-        east  = true_boundaries['northeast'][1]   # max longitude
-        north = true_boundaries['northeast'][0]   # max latitude
+        # Geographic bounds from the UI boundaries of this region
+        west  = ui_bounds['southwest'][1]   # min longitude
+        south = ui_bounds['southwest'][0]   # min latitude
+        east  = ui_bounds['northeast'][1]   # max longitude
+        north = ui_bounds['northeast'][0]   # max latitude
         geo_transform = from_bounds(west, south, east, north, size, size)
         geo_crs = RasterioCRS.from_epsg(4326)
 

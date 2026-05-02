@@ -62,6 +62,25 @@ class OrthoGenerator(ConcatImage):
                 filtered_images.append(img)
         stitched_image = cv2.hconcat(filtered_images)
 
+        # CROP THE IMAGE to the exact UI bounds
+        min_x = min(tile_boundaries["southwest"][0], tile_boundaries["southeast"][0])
+        min_y = min(tile_boundaries["northwest"][1], tile_boundaries["northeast"][1])
+        
+        ui_bounds = [float(x) for x in bound_array]
+        ui_min_x_tile, ui_max_y_tile = maptile_utiles.lat_lon_to_tile_fractional(ui_bounds[1], ui_bounds[0], zoomlevel)
+        ui_max_x_tile, ui_min_y_tile = maptile_utiles.lat_lon_to_tile_fractional(ui_bounds[3], ui_bounds[2], zoomlevel)
+        
+        px_min = int((ui_min_x_tile - min_x) * 256)
+        px_max = int((ui_max_x_tile - min_x) * 256)
+        py_min = int((ui_min_y_tile - min_y) * 256)
+        py_max = int((ui_max_y_tile - min_y) * 256)
+        
+        H_img, W_img = stitched_image.shape[:2]
+        px_min, px_max = max(0, px_min), min(W_img, px_max)
+        py_min, py_max = max(0, py_min), min(H_img, py_max)
+        
+        stitched_image = stitched_image[py_min:py_max, px_min:px_max]
+
         # Save the stitched image
         compression_params = [cv2.IMWRITE_PNG_COMPRESSION, 9]
         cv2.imwrite(os.path.join(globalParam.GAZEBO_MODEL_PATH, model_name, 'textures', model_name+'_aerial.png'), stitched_image, compression_params)
@@ -79,6 +98,7 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
             self.launch_location = data["launch_location"]
             self.zoom_level = data["zoom_level"]
             self.dem_zoom = data.get("dem_zoom", globalParam.DEM_RESOLUTION)
+            self.px4_compatible = data.get("px4_compatible", True)
         self.model_name = os.path.basename(self.tile_path)
 
 
@@ -109,12 +129,8 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
         """
     
         bound_array = self.boundaries.split(',')
-        boundaries = maptile_utiles.get_true_boundaries(bound_array,self.zoom_level)
-
-        sw = boundaries["southwest"]
-        se = boundaries["southeast"]
-        ne = boundaries["northeast"]
-        origin_lon,origin_lat = float((se[1]+sw[1])/2),float((sw[0]+ne[0])/2) 
+        origin_lon = (float(bound_array[0]) + float(bound_array[2])) / 2
+        origin_lat = (float(bound_array[1]) + float(bound_array[3])) / 2
         return {
             "latitude": origin_lat,
             "longitude": origin_lon,
@@ -182,8 +198,11 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
         template = FileWriter.read_template(os.path.join(globalParam.TEMPLATE_DIR_PATH ,'gazebo_world.txt'))
         launch_cord = self.get_launch_location()
         helipad_exist = os.path.exists(os.path.join(globalParam.GAZEBO_MODEL_PATH, 'helipad'))
-        FileWriter.write_world_file(template, self.model_name,launch_cord["latitude"],launch_cord["longitude"],os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name),launch_cord["altitude"],helipad_exist)
-        FileWriter.write_world_file(template, self.model_name,launch_cord["latitude"],launch_cord["longitude"],globalParam.GAZEBO_WORLD_PATH,launch_cord["altitude"],helipad_exist)
+        
+        origin_elevation = self.min_height if self.px4_compatible else 0.0
+        
+        FileWriter.write_world_file(template, self.model_name,launch_cord["latitude"],launch_cord["longitude"],os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name),origin_elevation,helipad_exist)
+        FileWriter.write_world_file(template, self.model_name,launch_cord["latitude"],launch_cord["longitude"],globalParam.GAZEBO_WORLD_PATH,origin_elevation,helipad_exist)
 
     def gen_px4_world(self) -> None:
         """
@@ -191,12 +210,15 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
         """
         template = FileWriter.read_template(os.path.join(globalParam.TEMPLATE_DIR_PATH, 'px4_world.txt'))
         launch_cord = self.get_launch_location()
+        
+        origin_elevation = self.min_height if self.px4_compatible else 0.0
+
         FileWriter.write_px4_world_file(template, self.model_name, launch_cord["latitude"], launch_cord["longitude"],
                                         os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name),
-                                        launch_cord["altitude"], self.size_x, self.size_y, self.size_z)
+                                        origin_elevation, self.size_x, self.size_y, self.size_z)
         FileWriter.write_px4_world_file(template, self.model_name, launch_cord["latitude"], launch_cord["longitude"],
                                         globalParam.GAZEBO_WORLD_PATH,
-                                        launch_cord["altitude"], self.size_x, self.size_y, self.size_z)
+                                        origin_elevation, self.size_x, self.size_y, self.size_z)
 
     def get_launch_pixelcord(self, south_west_bound, north_east_bound, width, height, launch_location):
         """
@@ -272,20 +294,18 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
             tuple: A tuple containing size_x, size_y, size_z, and pose_z.
         """
         bound_array = self.boundaries.split(',')
-        true_boundaries = maptile_utiles.get_true_boundaries(bound_array, self.zoom_level)
-        
-        # Calculate map dimensions
-        sw = true_boundaries["southwest"]
-        se = true_boundaries["southeast"]
-        ne = true_boundaries["northeast"]
+        ui_sw = Point(float(bound_array[1]), float(bound_array[0]))
+        ui_se = Point(float(bound_array[1]), float(bound_array[2]))
+        ui_ne = Point(float(bound_array[3]), float(bound_array[2]))
 
-        self.size_x = round(geodesic(sw, se).m, 2)  
-        self.size_y = round(geodesic(se, ne).m, 2)  
+        self.size_x = round(geodesic(ui_sw, ui_se).m, 2)  
+        self.size_y = round(geodesic(ui_se, ui_ne).m, 2)  
         self.size_z = round(self.max_height - self.min_height,2)
         origin_coord = self.get_true_origin()
         launch_location = self.get_launch_location()
         pose_x,pose_y = self.get_offset(origin_coord,launch_location)
-        pose_z = 0.0
+        
+        pose_z = 0.0 if self.px4_compatible else self.min_height
 
         return self.size_x,self.size_y,self.size_z,pose_x,pose_y,pose_z
 
@@ -303,11 +323,15 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
             if self.include_buildings:
                 origin_coord = self.get_true_origin()
                 print("Starting building data download...")
-                street_map = os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name, 'buildings.geojson')
-                output_dae_file = os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name, 'textures/buildings.dae')
-                true_boundaries = maptile_utiles.get_true_boundaries(self.boundaries.split(','), self.zoom_level)
+                bound_array = self.boundaries.split(',')
+                ui_bounds = {
+                    "southwest": (float(bound_array[1]), float(bound_array[0])),
+                    "southeast": (float(bound_array[1]), float(bound_array[2])),
+                    "northwest": (float(bound_array[3]), float(bound_array[0])),
+                    "northeast": (float(bound_array[3]), float(bound_array[2]))
+                }
                 geojson_to_dae = GeoJSONToDAE(street_map, output_dae_file)
-                geojson_to_dae.run(origin_coord,size_z,posez,self.heightmap, true_boundaries)
+                geojson_to_dae.run(origin_coord,size_z,posez,self.heightmap, ui_bounds)
                 print("Building models generated successfully")
             # Generate SDF files for the world
             self.gen_config()

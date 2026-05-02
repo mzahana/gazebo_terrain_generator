@@ -38,7 +38,7 @@ class FileWriter:
 		return directory
 
 	@staticmethod
-	def addMetadata(lock, path, file, name, description, format, bounds, center, area, zoom_level, dem_zoom, profile="mercator", tileSize=256, launchLocation=None):
+	def addMetadata(lock, path, file, name, description, format, bounds, center, area, zoom_level, dem_zoom, profile="mercator", tileSize=256, launchLocation=[0,0], px4_compatible=True):
 		'''
         Add metadata to the specified path as a JSON file.
 
@@ -77,7 +77,8 @@ class FileWriter:
 			("generator", "EliteMapper by Visor Dynamics"),
 			("type", "overlay"),
 			("attribution", "EliteMapper by Visor Dynamics"),
-			("launch_location", ','.join(map(str, launchLocation)))
+			("launch_location", ','.join(map(str, launchLocation))),
+			("px4_compatible", px4_compatible)
 		]
 		with open(path + "/metadata.json", 'w+') as jsonFile:
 			json.dump(dict(data), jsonFile)

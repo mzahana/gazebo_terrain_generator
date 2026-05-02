@@ -29,7 +29,7 @@ def random_string():
 
 	return uuid.uuid4().hex.upper()[0:6]
 
-def process_end_download(bounds, zoom_level, outputDirectory, outputFile, filePath, include_buildings=False):
+def process_end_download(bounds, zoom_level, outputDirectory, outputFile, filePath, include_buildings=False, px4_compatible=True):
 	global task_status
 	try:
 		task_status["status"] = "in_progress"
@@ -54,7 +54,7 @@ def process_end_download(bounds, zoom_level, outputDirectory, outputFile, filePa
 			print("Starting building data download...")
 			download_steetmap_data(true_boundaries, globalParam.BUILDING_PATH,model_path)
 
-		terrian_generator = GazeboTerrianGenerator(orthodir_path,include_buildings)
+		terrian_generator = GazeboTerrianGenerator(orthodir_path, include_buildings)
 		terrian_generator.generate_gazebo_world()
 		task_status["status"] = "completed"
 		print("Gazebo world generation completed successfully.")
@@ -158,6 +158,7 @@ def start_download():
 	area_rect = postvars['area']
 	launchLocation = list(map(float, postvars['launchLocation'].split(",")))
 	include_buildings = postvars.get('includeBuildlings', 'true').lower() == 'true'
+	px4_compatible = postvars.get('px4_compatible', 'true').lower() == 'true'
 
 	outputDirectory = outputDirectory.replace("{timestamp}", str(timestamp))
 	outputFile = outputFile.replace("{timestamp}", str(timestamp))
@@ -167,7 +168,7 @@ def start_download():
 	FileWriter.addMetadata(
 		lock, os.path.join(globalParam.OUTPUT_BASE_PATH, outputDirectory), filePath, outputFile,
 		"Map Tiles Downloader via AliFlux", "jpg", bounds, center, area_rect,
-		zoom_level, dem_zoom, "mercator", 256 * outputScale, launchLocation=launchLocation
+		zoom_level, dem_zoom, "mercator", 256 * outputScale, launchLocation=launchLocation, px4_compatible=px4_compatible
 	)
 	global task_status
 	task_status = {"status": "idle"} 
@@ -182,6 +183,7 @@ def end_download():
 	timestamp = int(postvars['timestamp'])
 	bounds = list(map(float, postvars['bounds'].split(",")))
 	include_buildings = postvars.get('includeBuildlings', 'true').lower() == 'true'
+	px4_compatible = postvars.get('px4_compatible', 'true').lower() == 'true'
 
 	outputDirectory = outputDirectory.replace("{timestamp}", str(timestamp))
 	outputFile = outputFile.replace("{timestamp}", str(timestamp))
@@ -189,7 +191,7 @@ def end_download():
 
 	FileWriter.close(lock, os.path.join(globalParam.OUTPUT_BASE_PATH, outputDirectory), filePath, zoom_level)
     # Start the long-running task in a background thread
-	thread = threading.Thread(target=process_end_download, args=(bounds, zoom_level, outputDirectory, outputFile, filePath, include_buildings))
+	thread = threading.Thread(target=process_end_download, args=(bounds, zoom_level, outputDirectory, outputFile, filePath, include_buildings, px4_compatible))
 	thread.start()
 
 	return jsonify({"code": 200, "message": "Download ended"})

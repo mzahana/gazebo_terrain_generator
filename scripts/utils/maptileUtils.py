@@ -88,6 +88,16 @@ class maptile_utiles:
         return tile.x, tile.y
 
     @staticmethod
+    def lat_lon_to_tile_fractional(lat: float, lon: float, zoom: int):
+        import math
+        lat = max(min(lat, 85.0511), -85.0511)
+        lat_rad = math.radians(lat)
+        n = 2.0 ** zoom
+        xtile = (lon + 180.0) / 360.0 * n
+        ytile = (1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n
+        return xtile, ytile
+
+    @staticmethod
     def dir_check(path: str, remove_existing: bool = False) -> None:
         """
         Check directory existence and create if not exists.

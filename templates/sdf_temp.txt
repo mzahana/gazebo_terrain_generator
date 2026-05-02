@@ -10,7 +10,7 @@
             <heightmap>
               <uri>model://$MODELNAME$/textures/$HEIGHTMAP$</uri>
               <size>$SIZEX$ $SIZEY$ $SIZEZ$</size>
-              <pos>$POSX$ $POSY$  $POSZ$</pos>
+              <pos>0 0 0</pos>
             </heightmap>
           </geometry>
         </collision>
@@ -25,7 +25,7 @@
               </texture>
               <uri>model://$MODELNAME$/textures/$HEIGHTMAP$</uri>
               <size>$SIZEX$ $SIZEY$ $SIZEZ$</size>
-              <pos>$POSX$ $POSY$ $POSZ$</pos>
+              <pos>0 0 0</pos>
               <sampling>2</sampling>
 
             </heightmap>

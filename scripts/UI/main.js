@@ -135,71 +135,38 @@ $(function() {
 					];
 				}, [Infinity, Infinity, -Infinity, -Infinity]);
 
-				// Get current zoom level for tile calculations
-				var zoomLevel = getMaxZoom();
-				
-				// Convert bounds to corners following Python logic
-				var boundArray = originalBounds;
-				
-				// Create corner coordinates (lat, lon) as in Python
-				var sw = [boundArray[1], boundArray[0]]; // (south, west)
-				var nw = [boundArray[3], boundArray[0]]; // (north, west)
-				var ne = [boundArray[3], boundArray[2]]; // (north, east)
-				var se = [boundArray[1], boundArray[2]]; // (south, east)
-				
-				// Convert to tile coordinates
-				var sw_tile_x = long2tile(sw[1], zoomLevel);
-				var sw_tile_y = lat2tile(sw[0], zoomLevel);
-				var nw_tile_x = long2tile(nw[1], zoomLevel);
-				var nw_tile_y = lat2tile(nw[0], zoomLevel);
-				var ne_tile_x = long2tile(ne[1], zoomLevel);
-				var ne_tile_y = lat2tile(ne[0], zoomLevel);
-				var se_tile_x = long2tile(se[1], zoomLevel);
-				var se_tile_y = lat2tile(se[0], zoomLevel);
-				
-				// Calculate height and width in tiles (following Python logic)
-				var height = Math.abs(sw_tile_y - nw_tile_y);
-				var width = Math.abs(ne_tile_x - nw_tile_x);
-				
-				console.log("Original bounds:", originalBounds);
-				console.log("Tile coordinates:", {
-					sw: [sw_tile_x, sw_tile_y],
-					nw: [nw_tile_x, nw_tile_y], 
-					ne: [ne_tile_x, ne_tile_y],
-					se: [se_tile_x, se_tile_y]
-				});
-				console.log("Calculated dimensions - width:", width, "height:", height);
-				
-				var tileBounds = {
-					"northwest": [nw_tile_x, nw_tile_y],
-					"northeast": [ne_tile_x, nw_tile_y],
-					"southwest": [nw_tile_x, sw_tile_y],
-					"southeast": [ne_tile_x, sw_tile_y]
-				};
-				
-				console.log("Final tile bounds:", tileBounds);
-				
-				// Convert tile bounds back to geographic coordinates with consistent logic
-				var true_nw = [tile2lat(tileBounds.northwest[1], zoomLevel), tile2long(tileBounds.northwest[0], zoomLevel)]; // (north, west)
-				var true_ne = [tile2lat(tileBounds.northeast[1], zoomLevel), tile2long(tileBounds.northeast[0], zoomLevel)]; // (north, east)
-				var true_sw = [tile2lat(tileBounds.southwest[1], zoomLevel), tile2long(tileBounds.southwest[0], zoomLevel)]; // (south, west)
-				var true_se = [tile2lat(tileBounds.southeast[1], zoomLevel), tile2long(tileBounds.southeast[0], zoomLevel)]; // (south, east)
-				
-				// Create the snapped bounds array [west, south, east, north] - ensure perfect rectangle
-				var snappedBounds = [
-					Math.min(true_nw[1], true_sw[1]), // west (minimum longitude)
-					Math.min(true_sw[0], true_se[0]), // south (minimum latitude)
-					Math.max(true_ne[1], true_se[1]), // east (maximum longitude)
-					Math.max(true_nw[0], true_ne[0])  // north (maximum latitude)
-				];
-				
-				// Create perfectly rectangular coordinates for the polygon
-				var snappedCoordinates = [[
-					[snappedBounds[0], snappedBounds[1]], // SW: [west, south]
-					[snappedBounds[2], snappedBounds[1]], // SE: [east, south]
-					[snappedBounds[2], snappedBounds[3]], // NE: [east, north]
-					[snappedBounds[0], snappedBounds[3]], // NW: [west, north]
-					[snappedBounds[0], snappedBounds[1]]  // SW: close polygon
+				// Calculate center
+				var centerLon = (originalBounds[0] + originalBounds[2]) / 2;
+				var centerLat = (originalBounds[1] + originalBounds[3]) / 2;
+				var centerPt = turf.point([centerLon, centerLat]);
+
+				// Calculate physical width and height
+				var ptWest = turf.point([originalBounds[0], centerLat]);
+				var ptEast = turf.point([originalBounds[2], centerLat]);
+				var widthMeters = turf.distance(ptWest, ptEast, {units: 'meters'});
+
+				var ptSouth = turf.point([centerLon, originalBounds[1]]);
+				var ptNorth = turf.point([centerLon, originalBounds[3]]);
+				var heightMeters = turf.distance(ptSouth, ptNorth, {units: 'meters'});
+
+				// Enforce perfect square
+				var targetSize = Math.max(widthMeters, heightMeters);
+
+				// Calculate new square bounds
+				var newNorth = turf.destination(centerPt, targetSize / 2, 0, {units: 'meters'}).geometry.coordinates[1];
+				var newEast = turf.destination(centerPt, targetSize / 2, 90, {units: 'meters'}).geometry.coordinates[0];
+				var newSouth = turf.destination(centerPt, targetSize / 2, 180, {units: 'meters'}).geometry.coordinates[1];
+				var newWest = turf.destination(centerPt, targetSize / 2, -90, {units: 'meters'}).geometry.coordinates[0];
+
+				var squareBounds = [newWest, newSouth, newEast, newNorth];
+
+				// Create perfectly square coordinates for the polygon
+				var squareCoordinates = [[
+					[squareBounds[0], squareBounds[1]], // SW
+					[squareBounds[2], squareBounds[1]], // SE
+					[squareBounds[2], squareBounds[3]], // NE
+					[squareBounds[0], squareBounds[3]], // NW
+					[squareBounds[0], squareBounds[1]]  // SW
 				]];
 				
 				// Use a timeout to ensure the feature is fully created before updating
@@ -210,7 +177,7 @@ $(function() {
 						type: 'Feature',
 						geometry: {
 							type: 'Polygon',
-							coordinates: snappedCoordinates
+							coordinates: squareCoordinates
 						},
 						properties: e.features[0].properties
 					};
@@ -220,10 +187,10 @@ $(function() {
 					draw.add(updatedFeature);
 				}, 50);
 				
-				window.launchBounds = snappedBounds;
+				window.launchBounds = squareBounds;
 				var center = [
-					(snappedBounds[0] + snappedBounds[2]) / 2,
-					(snappedBounds[1] + snappedBounds[3]) / 2
+					(squareBounds[0] + squareBounds[2]) / 2,
+					(squareBounds[1] + squareBounds[3]) / 2
 				];
 				window.launchLocation = center;
 
@@ -232,7 +199,7 @@ $(function() {
 					type: 'Feature',
 					geometry: {
 						type: 'Polygon',
-						coordinates: snappedCoordinates
+						coordinates: squareCoordinates
 					},
 					properties: e.features[0].properties
 				};
@@ -241,9 +208,14 @@ $(function() {
 				removeLaunchPadMarker();
 				createLaunchPadMarker();
 
-				// Calculate and show tile dimensions
-				var tileWidth = Math.abs(tileBounds.northeast[0] - tileBounds.northwest[0]);
-				var tileHeight = Math.abs(tileBounds.southwest[1] - tileBounds.northwest[1]);
+				var zoomLevel = getMaxZoom();
+				var sw_tile_x = long2tile(squareBounds[0], zoomLevel);
+				var sw_tile_y = lat2tile(squareBounds[1], zoomLevel);
+				var ne_tile_x = long2tile(squareBounds[2], zoomLevel);
+				var ne_tile_y = lat2tile(squareBounds[3], zoomLevel);
+				
+				var tileWidth = Math.abs(ne_tile_x - sw_tile_x) + 1;
+				var tileHeight = Math.abs(sw_tile_y - ne_tile_y) + 1;
 				var totalTiles = tileWidth * tileHeight;
 
 				// Clear any pending messages first
@@ -578,6 +550,9 @@ $(function() {
 				} else if (status === "in_progress") {
 					logItemRaw("World Generation Inprogress..");
 					setTimeout(() => pollTaskStatus(), 5000); // Poll every 5 seconds
+				} else if (status === "failed") {
+					logItemRaw("Gazebo world generation FAILED. Check server logs.");
+					$("#stop-button").html("RETRY");
 				} else {
 					logItemRaw("Unexpected status: " + status);
 				}
@@ -628,6 +603,7 @@ $(function() {
 		var centerArray = [bounds.getCenter().lng,bounds.getCenter().lat];
 		var launchLocation = window.launchLocation ? window.launchLocation : centerArray;
 		var includeBuildlings = $("#buildings-toggle").is(":checked");
+		var px4_compatible = $("#px4-compatible-toggle").is(":checked");
 		var data = new FormData();
 		data.append('maxZoom', getMaxZoom());
 		data.append('outputDirectory', outputDirectory);
@@ -641,6 +617,7 @@ $(function() {
 		data.append('launchLocation', launchLocation.join(","));
 		data.append('area', area_rect);
 		data.append('includeBuildlings', includeBuildlings);
+		data.append('px4_compatible', px4_compatible);
 
 		var request = await $.ajax({
 			url: "/start-download",
