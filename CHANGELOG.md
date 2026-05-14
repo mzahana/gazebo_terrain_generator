@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-05-14 — DSM Export for Satellite-Tile Orthorectification
+
+### Added: Optional Digital Surface Model export
+
+**Files:** `scripts/utils/dsmGenerator.py` (new), `scripts/utils/gazeboWorldGenerator.py`, `scripts/server.py`, `scripts/UI/index.htm`, `scripts/UI/main.js`
+
+Added a new "Export DSM" UI toggle that produces a `<model>_dsm.tif` Digital Surface Model alongside the existing TERCOM DEM. The DSM is built by rasterizing OpenStreetMap building footprints — already downloaded via the buildings vector tiles — at their OSM heights onto the bare-earth TERCOM DEM grid: `DSM(pixel) = terrain_AMSL(pixel) + building_height_above_ground(pixel)`.
+
+**Why:** Off-nadir satellite imagery used as a UAV-localisation reference (e.g. Esri / Maxar tiles in dense-urban areas) bakes building-top parallax into the tile pixels — rooftops are displaced from their true ground footprints by `h · tan(θ_sat)`, which can reach 50–200 m in midtown Manhattan. A DSM is the geometric input required to undo this displacement offline, before the tiles are consumed by a matching pipeline. The terrain generator already downloads both the bare-earth DEM and OSM building heights — exporting them as a single co-registered DSM raster makes it a one-stop data source for orthorectification workflows.
+
+**Design decisions:**
+
+- **Decoupled from the Gazebo "Include Buildings" toggle.** Enabling DSM export only triggers the OSM building data download for rasterization; it does *not* extrude buildings into Gazebo `.dae` meshes or add them to the SDF. This lets the Gazebo simulation stay on flat terrain with the satellite texture (the controlled experimental setup for cross-view matching) while still producing the DSM artifact for offline use.
+- **No PX4 vertical shift applied.** The DSM is built directly on the TERCOM DEM (absolute AMSL, float32, UTM-projected, native resolution), which is unaffected by the PX4 Compatibility toggle. The sidecar `_dsm.json` records `"px4_shift_applied": false` for traceability.
+- **Same CRS, transform, and pixel grid as the TERCOM DEM**, so the DSM is a drop-in replacement wherever the DEM was being read. The output is byte-identical in geometry to the TERCOM TIF — only the elevation values differ where buildings exist.
+- **Off by default.** The toggle is unchecked on UI load. DSM export is only worthwhile for dense-urban scenes (buildings > ~30 m); in rural / desert / suburban regions the rasterized DSM is virtually identical to the DEM and the extra building download is a net negative.
+- **Independent failure mode.** If the DSM step fails (e.g. unreadable geojson), it logs a warning and continues — the rest of the world generation is unaffected.
+
+**Output (when toggle enabled):**
+
+```
+<model>/textures/
+├── <model>_dsm.tif    # float32, UTM, AMSL, matches _tercom_dem.tif geometry
+└── <model>_dsm.json   # sidecar: building_count, height range, CRS, datum, px4_shift_applied=false
+```
+
+**Server / UI plumbing:**
+
+- New `export_dsm` flag flows from the UI through `/end-download` → `process_end_download` → `GazeboTerrianGenerator(..., export_dsm=...)`.
+- The building download is now triggered by `include_buildings OR export_dsm` — same dataset, two independent consumers.
+- Mesh generation (`GeoJSONToDAE`) and SDF inclusion remain gated by `include_buildings` alone, so Gazebo output is unchanged when only DSM is requested.
+
+---
+
 ## 2026-05-02 — Square Geographic Bounding Box & PX4 Vertical Offset Toggle
 
 ### Added: Square Geographic Bounding Box Enforcement

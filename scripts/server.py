@@ -29,7 +29,7 @@ def random_string():
 
 	return uuid.uuid4().hex.upper()[0:6]
 
-def process_end_download(bounds, zoom_level, outputDirectory, outputFile, filePath, include_buildings=False, px4_compatible=True):
+def process_end_download(bounds, zoom_level, outputDirectory, outputFile, filePath, include_buildings=False, px4_compatible=True, export_dsm=False):
 	global task_status
 	try:
 		task_status["status"] = "in_progress"
@@ -50,11 +50,15 @@ def process_end_download(bounds, zoom_level, outputDirectory, outputFile, filePa
 			print(f"[INFO] DEM fallback: requested zoom {dem_zoom}, used zoom {actual_dem_zoom}. metadata.json updated.")
 		orthodir_path = os.path.join(globalParam.OUTPUT_BASE_PATH, outputDirectory)
 		model_path =  os.path.join(globalParam.GAZEBO_MODEL_PATH,os.path.basename(orthodir_path))
-		if include_buildings:
-			print("Starting building data download...")
-			download_steetmap_data(true_boundaries, globalParam.BUILDING_PATH,model_path)
 
-		terrian_generator = GazeboTerrianGenerator(orthodir_path, include_buildings)
+		# Download building data when needed for Gazebo mesh, DSM export, or both.
+		# The two purposes are independent: include_buildings controls Gazebo mesh
+		# generation; export_dsm uses the same geojson for offline orthorectification.
+		if include_buildings or export_dsm:
+			print("Starting building data download...")
+			download_steetmap_data(true_boundaries, globalParam.BUILDING_PATH, model_path)
+
+		terrian_generator = GazeboTerrianGenerator(orthodir_path, include_buildings, export_dsm=export_dsm)
 		terrian_generator.generate_gazebo_world()
 		task_status["status"] = "completed"
 		print("Gazebo world generation completed successfully.")
@@ -184,6 +188,7 @@ def end_download():
 	bounds = list(map(float, postvars['bounds'].split(",")))
 	include_buildings = postvars.get('includeBuildlings', 'true').lower() == 'true'
 	px4_compatible = postvars.get('px4_compatible', 'true').lower() == 'true'
+	export_dsm = postvars.get('export_dsm', 'false').lower() == 'true'
 
 	outputDirectory = outputDirectory.replace("{timestamp}", str(timestamp))
 	outputFile = outputFile.replace("{timestamp}", str(timestamp))
@@ -191,7 +196,7 @@ def end_download():
 
 	FileWriter.close(lock, os.path.join(globalParam.OUTPUT_BASE_PATH, outputDirectory), filePath, zoom_level)
     # Start the long-running task in a background thread
-	thread = threading.Thread(target=process_end_download, args=(bounds, zoom_level, outputDirectory, outputFile, filePath, include_buildings, px4_compatible))
+	thread = threading.Thread(target=process_end_download, args=(bounds, zoom_level, outputDirectory, outputFile, filePath, include_buildings, px4_compatible, export_dsm))
 	thread.start()
 
 	return jsonify({"code": 200, "message": "Download ended"})

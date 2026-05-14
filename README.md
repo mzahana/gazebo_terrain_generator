@@ -29,6 +29,7 @@ A super easy-to-use tool for generate 3D Gazebo terrain using real-world elevati
 - **High-Precision Terrain**: 16-bit GeoTIFF heightmaps with lossless DEM tiles for smoother terrain and reduced stairstepping.
 - **TERCOM/PX4 Ready**: Exports a UTM-projected `_tercom_dem.tif` and sidecar JSON for use as a TERCOM reference map with PX4 simulation.
 - **PX4 World SDF**: Generates a `_px4.sdf` world file with all required PX4 SITL plugins, ODE physics at 250 Hz, and a proper isometric camera view — ready to use with PX4 Gazebo simulation out of the box.
+- **DSM Export (Optional)**: With the "Export DSM" toggle, the generator additionally produces a `_dsm.tif` Digital Surface Model — the bare-earth TERCOM DEM with OSM building heights burned on top. Same CRS, transform, and resolution as the TERCOM DEM; no PX4 vertical shift applied. Intended for offline satellite-tile orthorectification in dense-urban scenes. The Gazebo world is unaffected.
 
 ## 🌟 Recent Improvements
 
@@ -81,6 +82,8 @@ Generated model follow this structure:
 │       ├── model_name_height_map.tif      # 16-bit heightmap (square 2^n+1, EPSG:4326) — used by Gazebo
 │       ├── model_name_tercom_dem.tif      # float32 elevation GeoTIFF (UTM CRS, native resolution) — for TERCOM
 │       ├── model_name_tercom_dem.json     # Sidecar: vertical datum, CRS, zoom, bounds, elevation range
+│       ├── model_name_dsm.tif             # (Optional) Digital Surface Model = TERCOM DEM + OSM building heights
+│       ├── model_name_dsm.json            # (Optional) DSM sidecar metadata
 │       └── model_name_aerial.png          # Satellite imagery texture
 <GAZEBO_WORLD_PATH>/
 ├── model_name.sdf

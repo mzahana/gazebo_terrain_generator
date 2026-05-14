@@ -52,6 +52,7 @@ Browser UI → Flask API (server.py)
 | `demTilesDownloader.py` | Parallel download of Mapbox Terrain DEM v1 tiles |
 | `buildingDownloader.py` | Mapbox vector tile download + protobuf decode → GeoJSON |
 | `buildingsGenerator.py` | GeoJSON building footprints → DAE 3D mesh models |
+| `dsmGenerator.py` | (Optional) Burns OSM building heights onto the TERCOM DEM to produce a Digital Surface Model GeoTIFF for offline satellite-tile orthorectification |
 | `fileWriter.py` | Thread-safe writing of SDF, config, metadata JSON using templates |
 | `maptileUtils.py` | Lat/lon ↔ Web Mercator tile coordinate math (wraps `mercantile`) |
 | `param.py` | Global constants: paths, resolution settings, API keys |

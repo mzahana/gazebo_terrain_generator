@@ -604,6 +604,7 @@ $(function() {
 		var launchLocation = window.launchLocation ? window.launchLocation : centerArray;
 		var includeBuildlings = $("#buildings-toggle").is(":checked");
 		var px4_compatible = $("#px4-compatible-toggle").is(":checked");
+		var export_dsm = $("#export-dsm-toggle").is(":checked");
 		var data = new FormData();
 		data.append('maxZoom', getMaxZoom());
 		data.append('outputDirectory', outputDirectory);
@@ -618,6 +619,7 @@ $(function() {
 		data.append('area', area_rect);
 		data.append('includeBuildlings', includeBuildlings);
 		data.append('px4_compatible', px4_compatible);
+		data.append('export_dsm', export_dsm);
 
 		var request = await $.ajax({
 			url: "/start-download",

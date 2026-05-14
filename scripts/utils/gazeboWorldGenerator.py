@@ -6,6 +6,7 @@ from utils.fileWriter import FileWriter
 from utils.param import globalParam
 from utils.maptileUtils import maptile_utiles
 from utils.buildingsGenerator import GeoJSONToDAE
+from utils.dsmGenerator import DSMGenerator
 from utils.heightMapGenerator import HeightmapGenerator
 from utils.utils import ConcatImage
 from geopy.distance import geodesic
@@ -88,10 +89,11 @@ class OrthoGenerator(ConcatImage):
 
 
 class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
-    def __init__(self,tile_path:str,include_buildings: bool,**kwargs):
+    def __init__(self, tile_path: str, include_buildings: bool, export_dsm: bool = False, **kwargs):
         super().__init__(**kwargs)
         self.tile_path = tile_path
         self.include_buildings = include_buildings
+        self.export_dsm = export_dsm
         with open(os.path.join(self.tile_path, 'metadata.json')) as f:
             data = json.load(f)
             self.boundaries = data["bounds"]
@@ -309,6 +311,34 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
 
         return self.size_x,self.size_y,self.size_z,pose_x,pose_y,pose_z
 
+    def _generate_dsm(self) -> None:
+        """
+        Burn OSM building heights onto the TERCOM DEM to produce a DSM GeoTIFF.
+        Called only when export_dsm=True.  Independent of include_buildings —
+        buildings.geojson must have been downloaded before this is called.
+        """
+        textures_dir = os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name, 'textures')
+        tercom_path = os.path.join(textures_dir, self.model_name + '_tercom_dem.tif')
+        buildings_path = os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name, 'buildings.geojson')
+        dsm_path = os.path.join(textures_dir, self.model_name + '_dsm.tif')
+
+        if not os.path.isfile(tercom_path):
+            print("[DSM] Skipping DSM export — TERCOM DEM not found:", tercom_path)
+            return
+        if not os.path.isfile(buildings_path):
+            print("[DSM] Skipping DSM export — buildings.geojson not found:", buildings_path)
+            return
+
+        print("Generating DSM (TERCOM DEM + OSM building heights)...")
+        try:
+            meta = DSMGenerator().generate(tercom_path, buildings_path, dsm_path)
+            print(f"DSM generated: {dsm_path}")
+            print(f"  Buildings burned: {meta['building_count']}")
+            elev = meta['elevation_range_m']
+            print(f"  Surface elevation range: {elev['min']:.1f} m — {elev['max']:.1f} m AMSL")
+        except Exception as exc:
+            print(f"[DSM] Generation failed: {exc}")
+
     def generate_gazebo_world(self):
         """
             Generate the gazebo world along with world files.
@@ -333,6 +363,9 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
                 geojson_to_dae = GeoJSONToDAE(street_map, output_dae_file)
                 geojson_to_dae.run(origin_coord,size_z,posez,self.heightmap, ui_bounds)
                 print("Building models generated successfully")
+            if self.export_dsm:
+                self._generate_dsm()
+
             # Generate SDF files for the world
             self.gen_config()
             self.gen_sdf(size_x,size_y,size_z,pose_x,posey,posez,self.include_buildings)
