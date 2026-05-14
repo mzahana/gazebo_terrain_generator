@@ -360,8 +360,13 @@ class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
                     "northwest": (float(bound_array[3]), float(bound_array[0])),
                     "northeast": (float(bound_array[3]), float(bound_array[2]))
                 }
+                street_map = os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name, 'buildings.geojson')
+                output_dae_file = os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name, 'buildings.dae')
+                ortho_path = os.path.join(globalParam.GAZEBO_MODEL_PATH, self.model_name, 'textures',
+                                          self.model_name + '_aerial.png')
                 geojson_to_dae = GeoJSONToDAE(street_map, output_dae_file)
-                geojson_to_dae.run(origin_coord,size_z,posez,self.heightmap, ui_bounds)
+                geojson_to_dae.run(origin_coord, size_z, posez, self.heightmap, ui_bounds,
+                                   ortho_path=ortho_path, size_x=size_x, size_y=size_y)
                 print("Building models generated successfully")
             if self.export_dsm:
                 self._generate_dsm()

@@ -238,27 +238,11 @@ class FileWriter:
           <visual name="buildings_visual">
             <geometry>
               <mesh>
-                <uri>model://{model_name}/textures/buildings.dae</uri>
+                <uri>model://{model_name}/buildings.dae</uri>
                 <scale>1 1 1</scale>
               </mesh>
             </geometry>
-            <material>
-              <!-- Light grey -->
-              <ambient>0.75 0.75 0.75 1</ambient>
-              <diffuse>0.85 0.85 0.85 1</diffuse>
-              <specular>0.05 0.05 0.05 1</specular>
-              <emissive>0 0 0 1</emissive>
-            </material>
           </visual>
-          <!-- Collision -->
-          <collision name="buildings_collision">
-            <geometry>
-              <mesh>
-                <uri>model://{model_name}/textures/buildings.dae</uri>
-                <scale>1 1 1</scale>
-              </mesh>
-            </geometry>
-          </collision>
         </link>
         """
 		else :
