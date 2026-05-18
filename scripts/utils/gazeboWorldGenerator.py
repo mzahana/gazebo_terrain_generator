@@ -88,6 +88,7 @@ class OrthoGenerator(ConcatImage):
 
 
 
+
 class GazeboTerrianGenerator(HeightmapGenerator,OrthoGenerator):
     def __init__(self, tile_path: str, include_buildings: bool, export_dsm: bool = False, **kwargs):
         super().__init__(**kwargs)

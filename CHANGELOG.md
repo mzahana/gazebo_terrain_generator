@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-18 — Lighting and Shadows Optimization
+
+### Changed: Improved Simulation Lighting Defaults
+
+**Files:** `templates/gazebo_world.txt`, `templates/px4_world.txt`, `templates/sdf_temp.txt`
+
+Optimized the default scene and lighting configurations in the generated Gazebo world and PX4 world templates to enhance terrain rendering and visibility.
+- Adjusted the main directional light (`sun` / `sunUTC`) to be strictly top-down (`<direction>0 0 -1</direction>`) with pure white diffuse lighting (`<diffuse>1 1 1 1</diffuse>`).
+- Disabled shadows in the PX4 world template to improve performance and prevent harsh shadowing artifacts during SITL simulation.
+- Specified a proper ambient scene lighting configuration in the default Gazebo world template.
+- Removed the normal map texture reference (`<normal>`) from the `sdf_temp.txt` terrain material definition.
+
+---
 ## 2026-05-14 — DSM Export for Satellite-Tile Orthorectification
 
 ### Added: Optional Digital Surface Model export

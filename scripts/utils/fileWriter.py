@@ -220,7 +220,7 @@ class FileWriter:
 		sdf_template = sdf_template.replace("$SIZEX$", str(size_x))
 		sdf_template = sdf_template.replace("$SIZEY$", str(size_y))
 		sdf_template = sdf_template.replace("$SIZEZ$", str(size_z))
-		
+
 		sdf_template = sdf_template.replace("$POSX$",str(pose_x))
 		sdf_template = sdf_template.replace("$POSY$",str(pose_y))
 		sdf_template = sdf_template.replace("$POSZ$",str(origin_height))
